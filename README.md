@@ -19,6 +19,7 @@
 
 ### ✨ Fonctionnalités
 
+- 📚 **Bibliothèque de services** standardisés : Jellyfin, *arr, Syncthing, cross-seed, Beszel, Flatpak — réglables sans toucher au code
 - 🔍 **Découverte automatique** : tout script `services/<nom>/<nom>.sh` qui source `lib/common.sh` est un service — rien à déclarer
 - 🚦 **Mise à jour à bon escient** : l'image n'est tirée que si le registre (Docker Hub) a un digest plus récent, si la config compose a changé, ou si le conteneur est arrêté / tourne une ancienne image
 - 💾 **Sauvegardes vérifiables** : archive `.tar.gz` + manifeste SHA-256, rotation, restauration interactive avec filet de sécurité (`restore.sh`)
@@ -35,10 +36,10 @@ git clone https://github.com/jpreculeau/acmechanic.git ~/acmechanic
 cd ~/acmechanic
 cp local.conf.example local.conf        # réglages machine (optionnel)
 
-# Un premier service, à partir du modèle Docker
-cp -r examples/services/docker-exemple services/mon-app
-mv services/mon-app/docker-exemple.sh services/mon-app/mon-app.sh
-$EDITOR services/mon-app/mon-app.sh     # PROJET, CONTENEUR, URL, IMAGE_REF...
+# Activer des services de la bibliothèque (liens : suivent les mises à jour)
+ln -s "$PWD/bibliotheque/jellyfin" services/jellyfin
+ln -s "$PWD/bibliotheque/flatpak"  services/flatpak
+acmechanic --liste                      # vérifier la détection
 
 # Optionnel : commande globale
 sudo ln -s ~/acmechanic/acmechanic.sh /usr/local/bin/acmechanic
@@ -74,14 +75,11 @@ Le code de sortie est le **nombre d'étapes en échec** (0 = tout va bien) : pra
 | `ACMECHANIC_ICONES=non` | Symboles Unicode simples au lieu des icônes Nerd Font |
 | `LIMITES_RESSOURCES=non` | Pas de cgroup ni de `nice`/`ionice` |
 
-### ✍️ Écrire un service
+### 📚 Bibliothèque et services maison
 
-Un service est un script `services/<nom>/<nom>.sh`, exécutable, qui source `lib/common.sh`. Deux modèles sont fournis dans [`examples/services/`](examples/services/) :
+La [bibliothèque](bibliotheque/README.md) fournit des services prêts à l'emploi (Jellyfin, Sonarr/Radarr/Prowlarr/Lidarr, Syncthing, cross-seed, Beszel, Flatpak) et leur `docker-compose.yml` modèle. On les active par un lien dans `services/`, et on les règle dans `local.conf` selon une convention unique : `<NOM>_PROJET`, `<NOM>_DONNEES`, `<NOM>_URL`, `<NOM>_CANAL`.
 
-- **`docker-exemple`** : un conteneur Docker Compose (+ `docker-compose.yml` avec healthcheck) via `maintenir_service_docker`
-- **`flatpak`** : mise à jour des Flatpak, avec sauvegarde à froid des applications listées dans `FLATPAK_SAUVEGARDES`
-
-Briques disponibles (`lib/common.sh`) : `run_etape "libellé" <délai> cmd...`, `ignorer_etape`, `log`/`ok`/`warn`/`err`, `prendre_verrou`, `enregistrer_version`, `bilan_service`, `creer_sauvegarde` (`lib/backup.sh`).
+Un service maison est un script `services/<nom>/<nom>.sh`, exécutable, qui source `lib/service.sh` (ou `lib/common.sh`). Le plus simple : partir de [`bibliotheque/_modele`](bibliotheque/_modele/). Briques disponibles : `docker_standard`, `run_etape "libellé" <délai> cmd...`, `ignorer_etape`, `log`/`ok`/`warn`/`err`, `enregistrer_version`, `creer_sauvegarde`.
 
 Pour imposer un ordre : `ln -s ../services/a/a.sh ordre.d/10-a.sh` (les services liés passent d'abord, dans l'ordre des préfixes).
 
@@ -116,10 +114,11 @@ acmechanic/
 ├── lib/
 │   ├── common.sh          # journal, verrous, étapes, bridage, registre, gate Docker
 │   ├── backup.sh          # archives + manifeste SHA-256 + rotation
+│   ├── service.sh         # socle des services (docker_standard...)
 │   └── tableau.sh         # affichage fixe (cases, icônes, couleurs)
 ├── services/              # VOS services (ignorés par git)
 ├── ordre.d/               # liens d'ordre (ignorés par git)
-├── examples/services/     # modèles docker-exemple et flatpak
+├── bibliotheque/          # services prêts à l'emploi + _modele
 └── tests/run_tests.sh
 ```
 
@@ -136,7 +135,8 @@ make check   # les deux
 | Icônes en carrés ou `?` | Installer une Nerd Font dans le terminal, ou `ACMECHANIC_ICONES=non` |
 | Pas de tableau | Sortie non-terminal, fenêtre trop petite, ou `ACMECHANIC_TABLEAU=non` |
 | « sudo demande un mot de passe » | `sudo -v` avant de lancer : les étapes système sont sinon ignorées |
-| Un service n'apparaît pas | `acmechanic --liste` : nom du script = nom du dossier ? exécutable ? source `lib/common.sh` ? |
+| Un service n'apparaît pas | `acmechanic --liste` : nom du script = nom du dossier ? exécutable ? source `lib/service.sh` ou `lib/common.sh` ? |
+| « docker-compose.yml introuvable » | Régler `<NOM>_PROJET` dans `local.conf`, ou partir du modèle `bibliotheque/<nom>/docker-compose.yml` |
 | « Une autre exécution … est déjà en cours » | Une exécution tourne encore (`/tmp/maintenance-<nom>.lock`) |
 | Détail d'un service | `~/logs/acmechanic/services/<nom>.sortie` |
 

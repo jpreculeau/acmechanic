@@ -1,0 +1,26 @@
+# Modèle de compose compatible avec la gate de maintenir_service_docker :
+# - tag piloté par <CONTENEUR>_TAG (résolu par docker_standard) ;
+# - container_name = nom du service (les scripts le supposent) ;
+# - healthcheck avec start_interval : sonde rapide au démarrage ;
+# - journaux bornés, port publié sur 127.0.0.1 seulement.
+services:
+  mon-app:
+    image: editeur/mon-app:${MON_APP_TAG:-latest}
+    container_name: mon-app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/health || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+      start_interval: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

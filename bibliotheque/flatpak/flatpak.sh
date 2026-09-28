@@ -11,21 +11,16 @@
 # Les applications a sauvegarder sont declarees dans FLATPAK_SAUVEGARDES
 # (voir config.sh / local.conf). Les autres sont simplement mises a jour.
 #
+# Installation : ln -s ../bibliotheque/flatpak services/flatpak
+#
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 set -uo pipefail
 
 SERVICE_NAME="flatpak"
 : "${ACMECHANIC_HOME:=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)}"
-export ACMECHANIC_HOME
-# shellcheck source=../../../lib/common.sh
-source "${ACMECHANIC_HOME}/lib/common.sh"
-# shellcheck source=../../../config.sh
-source "${ACMECHANIC_HOME}/config.sh"
-# shellcheck source=../../../lib/backup.sh
-source "${ACMECHANIC_HOME}/lib/backup.sh"
-
-prendre_verrou flatpak
+# shellcheck source=../../lib/service.sh
+source "${ACMECHANIC_HOME}/lib/service.sh"
 
 titre "MAINTENANCE DES APPLICATIONS FLATPAK"
 

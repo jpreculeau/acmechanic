@@ -126,7 +126,7 @@ decouvrir_services() {
 
 	# Un script de maintenance source la bibliotheque commune.
 	utilise_la_bibliotheque() {
-		grep -qE '(source|\.)[[:space:]].*lib/common\.sh' "$1" 2>/dev/null
+		grep -qE '(source|\.)[[:space:]].*lib/(common|service)\.sh' "$1" 2>/dev/null
 	}
 
 	# --- 1. Ordre impose par les liens numerotes ---
@@ -154,7 +154,7 @@ decouvrir_services() {
 	done < <(
 		for racine in "$SERVICES_DIR" "${SERVICES_EXTRA_DIRS[@]}"; do
 			[ -d "$racine" ] || continue
-			find "$racine" -mindepth 2 -maxdepth 2 -name '*.sh' -type f 2>/dev/null
+			find -L "$racine" -mindepth 2 -maxdepth 2 -name '*.sh' -type f 2>/dev/null
 		done | sort -u
 	)
 
@@ -215,8 +215,9 @@ case "${1:-}" in
 	echo
 	echo "Pour qu'un nouveau service soit detecte automatiquement :"
 	echo "  - le placer dans $SERVICES_DIR/<nom>/<nom>.sh"
-	echo "    (modeles dans $ACMECHANIC_HOME/examples/services/)"
-	echo "  - y ecrire :  source \"\${ACMECHANIC_HOME}/lib/common.sh\""
+	echo "    ou lier un service de la bibliotheque :"
+	echo "    ln -s $ACMECHANIC_HOME/bibliotheque/<nom> $SERVICES_DIR/<nom>"
+	echo "  - y ecrire :  source \"\${ACMECHANIC_HOME}/lib/service.sh\""
 	echo "  - le rendre executable :  chmod +x"
 	echo "Pour imposer sa position dans l'ordre d'execution :"
 	echo "  ln -s $SERVICES_DIR/<nom>/<nom>.sh $DOSSIER_ORDRE/NN-<nom>.sh"

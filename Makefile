@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-SCRIPTS := acmechanic.sh restore.sh config.sh $(wildcard lib/*.sh) $(wildcard tests/*.sh) $(wildcard examples/services/*/*.sh)
+SCRIPTS := acmechanic.sh restore.sh config.sh $(wildcard lib/*.sh) $(wildcard tests/*.sh) $(wildcard bibliotheque/*/*.sh)
 
 .PHONY: lint test check
 lint:

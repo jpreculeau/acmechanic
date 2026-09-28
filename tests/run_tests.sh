@@ -22,7 +22,7 @@ export ACMECHANIC_HOME="$ROOT"
 
 echo "syntaxe"
 for f in "$ROOT"/acmechanic.sh "$ROOT"/restore.sh "$ROOT"/config.sh "$ROOT"/lib/*.sh \
-	"$ROOT"/examples/services/*/*.sh; do
+	"$ROOT"/bibliotheque/*/*.sh; do
 	check "bash -n ${f#"$ROOT"/}" bash -n "$f"
 done
 
@@ -46,6 +46,28 @@ mkdir -p "$TMP/ordre"
 ln -s "$S/alpha/alpha.sh" "$TMP/ordre/10-alpha.sh"
 liste="$(SERVICES_DIR="$S" ORDRE_DIR="$TMP/ordre" "$ROOT/acmechanic.sh" --liste 2>&1)"
 check "lien numerote : ordre impose" grep -qE 'alpha +ordre impose' <<<"$liste"
+ln -s "$ROOT/bibliotheque/syncthing" "$S/syncthing"
+liste="$(SERVICES_DIR="$S" ORDRE_DIR="$TMP/vide" "$ROOT/acmechanic.sh" --liste 2>&1)"
+check "service de la bibliotheque lie (symlink) detecte" grep -qE 'syncthing +detecte automatiquement' <<<"$liste"
+
+echo "bibliotheque (lib/service.sh)"
+out="$(bash -c '
+	SERVICE_NAME=test-service
+	source "$ACMECHANIC_HOME/lib/service.sh"
+	maintenir_service_docker() { echo "$*"; }   # bouchon : pas de Docker
+	DOCKER_PROJET=/p
+	docker_standard beszel-agent editeur/agent:latest http://u /d a b
+	echo "$BESZEL_AGENT_TAG"
+	docker_standard app editeur/app:latest "" /d
+' 2>/dev/null)"
+check "docker_standard : arguments transmis" eq "$(sed -n 1p <<<"$out")" "/p beszel-agent http://u editeur/agent:latest oui /d a b"
+check "docker_standard : tag exporte en <CONTENEUR>_TAG" eq "$(sed -n 2p <<<"$out")" "latest"
+check "docker_standard : sans elements, pas de sauvegarde" eq "$(sed -n 3p <<<"$out")" "/p app  editeur/app:latest non /d"
+for d in "$ROOT"/bibliotheque/*/; do
+	n="$(basename "$d")"
+	check "bibliotheque/$n : script nomme comme son dossier" test -x "$d/$n.sh"
+	check "bibliotheque/$n : source lib/service.sh" grep -q 'lib/service.sh' "$d/$n.sh"
+done
 
 echo "configuration"
 mkdir -p "$TMP/home"

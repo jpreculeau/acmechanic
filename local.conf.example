@@ -20,7 +20,14 @@
 # LIMITE_RAM_DURE=2G
 # LIMITES_RESSOURCES=non     # désactive cgroups + nice/ionice
 
-# --- Applications Flatpak sauvegardées (examples/services/flatpak) ---
+# --- Services de la bibliothèque (voir bibliotheque/README.md) ---
+# Convention : <NOM>_PROJET, <NOM>_DONNEES, <NOM>_URL, <NOM>_CANAL
+# JELLYFIN_PROJET="/opt/media/jellyfin"
+# JELLYFIN_CANAL=unstable
+# ARR_SERVICES=(sonarr radarr)
+# SONARR_CANAL=develop
+
+# --- Applications Flatpak sauvegardées (bibliotheque/flatpak) ---
 # FLATPAK_SAUVEGARDES=(
 # 	"monapp:org.exemple.MonApp"
 # )

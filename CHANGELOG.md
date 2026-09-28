@@ -13,4 +13,6 @@ Première version publique, extraite d'un usage quotidien sur Raspberry Pi.
 - Sauvegardes `.tar.gz` + manifeste SHA-256, rotation, `restore.sh` interactif (Docker, Flatpak, fichiers) avec mise de côté de l'état précédent.
 - Tableau fixe (`lib/tableau.sh`) : cases pré-dimensionnées selon la fenêtre, icônes Nerd Font, 16 couleurs du thème du terminal, pastilles de statut, bilan des versions avant → après.
 - Arrêt propre de tout l'arbre sur Ctrl+C / fermeture du terminal, watchdog anti-fige, verrous `flock`.
-- `config.sh` + `local.conf` (ignoré par git), modèles `examples/services/` (Docker Compose, Flatpak), `make lint test`, CI GitHub Actions.
+- Bibliothèque de services standardisés (`bibliotheque/`) : Jellyfin, *arr, Syncthing, cross-seed, Beszel, Flatpak et `_modele`, chacun avec un `docker-compose.yml` modèle ; socle `lib/service.sh` (`docker_preparer`, `docker_standard`, `docker_terminer`) et convention `<NOM>_PROJET/_DONNEES/_URL/_CANAL`.
+- Services activables par lien symbolique (`find -L`), fichier compose non standard via `COMPOSE_FICHIER`, digests des images officielles (`nginx`, `library/nginx`) reconnus.
+- `config.sh` + `local.conf` (ignoré par git), `make lint test`, CI GitHub Actions.

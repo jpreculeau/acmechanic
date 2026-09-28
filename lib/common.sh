@@ -891,6 +891,10 @@ digest_image() {
 	local img="$1" repo
 	[ -z "$img" ] && return 1
 	repo="${img%:*}"
+	# Images officielles : Docker range « library/nginx » et
+	# « docker.io/nginx » sous le nom court « nginx@sha256:... ».
+	repo="${repo#docker.io/}"
+	repo="${repo#library/}"
 	# Digest du manifest-list LOCAL (champ RepoDigests, qui est
 	# l'empreinte du manifest-list, pas d'une plateforme isolee).
 	# Une image peut porter PLUSIEURS RepoDigests (ex. docker.io et
@@ -920,7 +924,11 @@ digest_registre() {
 	local img="$1"
 	local repo="${img%:*}" tag="${img##*:}" out
 	[ "$tag" = "$img" ] && tag="latest"
-	[[ "$repo" == */* ]] || return 1
+	repo="${repo#docker.io/}"
+	# Autre registre (ghcr.io/..., lscr.io/..., hote:port/...) : non gere,
+	# l'appelant fera le pull. Les images officielles (« nginx ») sont
+	# sur Docker Hub (_hub_url ajoute library/).
+	[[ "$repo" == */* && "${repo%%/*}" == *[.:]* ]] && return 1
 
 	# Cache court (TTL_DIGEST_TAG, 30 min par defaut), prechauffe par
 	# Acmechanic ; sinon une requete hub_tag_info (qui remplit aussi la date).
@@ -944,7 +952,8 @@ version_flatpak() {
 compose() {
 	local projet="$1"
 	shift
-	docker compose --project-directory "$projet" -f "$projet/docker-compose.yml" "$@"
+	# COMPOSE_FICHIER : fichier compose non standard (ex. docker-compose.app.yml).
+	docker compose --project-directory "$projet" -f "${COMPOSE_FICHIER:-$projet/docker-compose.yml}" "$@"
 }
 
 # --- Maintenance generique d'un service Docker (DRY) ---
@@ -1041,7 +1050,7 @@ attendre_sante() {
 # configuration perimee. En cas de doute (erreur), on repond « a jour »
 # pour ne jamais provoquer de recreation injustifiee.
 config_a_jour() {
-	local projet="$1" service="$2" fichier="${3:-$1/docker-compose.yml}"
+	local projet="$1" service="$2" fichier="${3:-${COMPOSE_FICHIER:-$1/docker-compose.yml}}"
 	local h_compose h_conteneur conteneur
 	h_compose="$(docker compose --project-directory "$projet" -f "$fichier" \
 		config --hash "$service" 2>/dev/null | awk '{print $2}')"
