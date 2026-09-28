@@ -1,0 +1,14 @@
+# Réglages machine (jamais publiés)
+local.conf
+# Vos services et leur ordre : propres à chaque machine
+services/*
+!services/.gitkeep
+ordre.d/
+# Journaux / temporaires
+*.log
+*.bak
+*.tmp
+*.swp
+.idea/
+.vscode/
+.DS_Store

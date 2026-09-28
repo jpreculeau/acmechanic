@@ -1,0 +1,45 @@
+# shellcheck shell=bash
+# local.conf.example - Modèle de réglages machine pour Acmechanic.
+# Copiez-le en local.conf (ignoré par git) puis adaptez-le :
+#   cp local.conf.example local.conf
+
+# --- Où chercher les services en plus de services/ ---
+# SERVICES_EXTRA_DIRS=("$HOME/scripts")
+
+# --- Délais ---
+# DELAI_SERVICE=3000
+# DELAI_SYSTEME=1800
+
+# --- Sauvegardes ---
+# BACKUP_ROOT="/chemin/vers/disque/backups"
+# BACKUP_GARDER=5
+
+# --- Ressources (lib/common.sh) ---
+# LIMITE_CPU=200%            # quota CPU de chaque service (200% = 2 cœurs)
+# LIMITE_RAM_SOUPLE=1G
+# LIMITE_RAM_DURE=2G
+# LIMITES_RESSOURCES=non     # désactive cgroups + nice/ionice
+
+# --- Applications Flatpak sauvegardées (examples/services/flatpak) ---
+# FLATPAK_SAUVEGARDES=(
+# 	"monapp:org.exemple.MonApp"
+# )
+
+# --- Services restaurables par restore.sh ---
+# SERVICES_CONNUS=(mon-app monapp)
+#
+# config_service() {
+# 	local service="$1" cle="$2"
+# 	case "$service:$cle" in
+# 	mon-app:type) echo "docker" ;;
+# 	mon-app:projet) echo "$HOME/mon-app" ;;
+# 	mon-app:conteneur) echo "mon-app" ;;
+# 	mon-app:cible) echo "$HOME/mon-app" ;;
+# 	mon-app:url) echo "http://127.0.0.1:8080/health" ;;
+#
+# 	monapp:type) echo "flatpak" ;;
+# 	monapp:appid) echo "org.exemple.MonApp" ;;
+# 	monapp:cible) echo "$HOME/.var/app/org.exemple.MonApp" ;;
+# 	*) echo "" ;;
+# 	esac
+# }

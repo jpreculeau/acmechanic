@@ -1,0 +1,8 @@
+external-sources=true
+source-path=SCRIPTDIR
+# Variables globales partagées entre modules sourcés : faux positifs
+disable=SC2034
+# Fonctions appelées indirectement (run_etape, trap) : faux positifs
+disable=SC2317
+# Scripts passés à bash -c / sudo : expansion différée voulue
+disable=SC2016
