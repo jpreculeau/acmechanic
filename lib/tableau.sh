@@ -48,7 +48,7 @@ if [ "${ACMECHANIC_ICONES:-oui}" = oui ]; then
 		[vaultwarden]=$'\xef\x80\xa3' [uptime-kuma]=$'\xef\x88\x9e' [forgejo]=$'\xef\x84\xa6'
 		[portainer]=$'\xef\x82\xae' [beszel]=$'\xef\x82\x80' [open-webui]=$'\xef\x83\xa6'
 		[depots-git]=$'\xef\x87\x93' [outils-ia]=$'\xef\x83\x90' [micrologiciel]=$'\xef\x8b\x9b'
-		[nettoyage]=$'\xef\x87\xb8' [acmefrag]=$'\xef\x82\xa0' [flatpak]=$'\xef\x86\xb3'
+		[nettoyage]=$'\xef\x87\xb8' [acmefrag]=$'\xef\x82\xa0' [flatpak]=$'\xef\x86\xb3' [bureau]=$'\xef\x84\x88'
 	)
 	_ICONE_STATUT=(
 		[OK]=$'\xef\x81\x98' [INCHANGE]=$'\xef\x81\x98' [MAJ]=$'\xef\x82\xaa'

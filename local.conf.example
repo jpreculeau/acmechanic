@@ -37,6 +37,10 @@
 # DEPOTS_GIT=("$HOME/acmefrag" "$HOME/outils/mon-script")
 # IA_OUTILS="claude npm uv pipx pi hermes ollama"
 # IA_NPM=(@openai/codex @google/gemini-cli)
+# OLLAMA_MAJ=oui                    # installer les nouvelles versions d'Ollama (sinon : signalées)
+# BUREAU_PIP_GIT=(nwg-panel)        # barre installée depuis git, avec correctifs :
+# NWG_PANEL_SRC="$HOME/src/nwg-panel"
+# NWG_PANEL_CORRECTIFS=(ma-branche-de-correctif)
 # NETTOYAGE_JOURNAL=2weeks          # ou non
 # ACMEFRAG_CIBLE="/chemin/vers/disque/Videos"
 # ACMECHANIC_AUTO_MAJ=signaler      # oui (défaut) | signaler | non

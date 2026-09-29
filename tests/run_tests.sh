@@ -125,6 +125,54 @@ check "outils-ia : claude mis a jour" eq "$rc/$(cat "$B/v")" "0/2.0"
 out="$(ACMEFRAG_DOSSIER="$TMP/absent" "$ROOT/bibliotheque/acmefrag/acmefrag.sh" 2>&1)"; rc=$?
 check "acmefrag : absent => ignore, code 0" eq "$rc" "0"
 
+echo "ollama (installeur officiel, bouchons)"
+O="$TMP/ollama"; mkdir -p "$O"; echo 1.0.0 >"$O/ov"; : >"$O/systemctl.log"
+cat >"$O/ollama" <<EOS
+#!/bin/sh
+[ "\$1" = --version ] && echo "ollama version is \$(cat $O/ov)"
+[ "\$1" = list ] && exit 1
+exit 0
+EOS
+cat >"$O/curl" <<EOS
+#!/bin/sh
+case "\$*" in
+*api.github.com*) echo '"tag_name": "v9.9.9"' ;;
+*" -o "*) while [ "\$1" != -o ]; do shift; done; printf 'echo "\$OLLAMA_VERSION" >$O/ov\n' >"\$2" ;;
+esac
+EOS
+printf '#!/bin/sh\n[ "$1" = -n ] && shift\nexec "$@"\n' >"$O/sudo"
+cat >"$O/systemctl" <<EOS
+#!/bin/sh
+case "\$1" in is-active) echo inactive ;; is-enabled) echo disabled ;; cat) exit 0 ;; *) echo "\$*" >>$O/systemctl.log ;; esac
+EOS
+chmod +x "$O"/*
+PATH="$O:$PATH" IA_OUTILS=ollama OLLAMA_MAJ=oui "$ROOT/bibliotheque/outils-ia/outils-ia.sh" >/dev/null 2>&1; rc=$?
+check "ollama : mise a jour appliquee (version fixee)" eq "$rc/$(cat "$O/ov")" "0/9.9.9"
+check "ollama : service remis desactive et arrete" eq "$(tr '\n' ';' <"$O/systemctl.log")" "disable ollama;stop ollama;"
+echo 1.0.0 >"$O/ov"
+PATH="$O:$PATH" IA_OUTILS=ollama "$ROOT/bibliotheque/outils-ia/outils-ia.sh" >/dev/null 2>&1
+check "ollama : OLLAMA_MAJ par defaut = signaler seulement" eq "$(cat "$O/ov")" "1.0.0"
+
+echo "bureau (depot git + correctifs)"
+N="$TMP/nwg"; mkdir -p "$N"
+nouveau_depot demo-outil
+git -C "$G/demo-outil.src" tag v1.0
+( cd "$G/demo-outil.src" && git checkout -q -b correctif-a && echo a >f && git commit -qam a &&
+	git checkout -q main && git checkout -q -b correctif-b && echo b >f && git commit -qam b && git checkout -q main )
+git -C "$G/demo-outil.src" push -q origin correctif-a correctif-b --tags
+git -C "$G/demo-outil" fetch -q origin 'refs/heads/correctif-*:refs/heads/correctif-*' --tags
+cat >"$N/local.conf" <<EOS
+BUREAU_PIP_GIT=(demo-outil)
+DEMO_OUTIL_SRC="$G/demo-outil"
+DEMO_OUTIL_CORRECTIFS=(correctif-a correctif-b)
+EOS
+cp -r "$ROOT/lib" "$ROOT/config.sh" "$ROOT/locale" "$N/"; mkdir -p "$N/bibliotheque"; cp -r "$ROOT/bibliotheque/bureau" "$N/bibliotheque/"
+env -u ACMECHANIC_HOME BUREAU_ETAT="$N/etat" "$N/bibliotheque/bureau/bureau.sh" >/dev/null 2>&1; rc=$?
+out="$(cat "$LOG_DIR/bureau.log")"
+check "bureau : code 0" eq "$rc" "0"
+check "bureau : conflit de correctifs => point d'attention, rien d'installe" grep -q "correctif-b ne s'applique plus sur v1.0" <<<"$out"
+check "bureau : dossier jetable supprime" eq "$(git -C "$G/demo-outil" worktree list | wc -l)" "1"
+
 echo "configuration"
 mkdir -p "$TMP/home"
 cp "$ROOT/config.sh" "$TMP/home/"

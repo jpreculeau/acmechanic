@@ -14,6 +14,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 - Thèmes d'affichage en français et en anglais : `droides`, `kaiju`, `matrice`, `cyborg`, `delorean`, `vaisseau` (`ACMECHANIC_THEME`, aperçu : `acmechanic --themes`).
 - Langues : catalogues `locale/fr.sh` et `locale/en.sh`, `ACMECHANIC_LANGUE`, autres langues par simple catalogue (test de complétude).
 - Points d'attention : `point_attention "message" "commande"` pour tout service, regroupés en fin de passage (redémarrage requis, micrologiciel, auto-mise à jour non appliquée…).
+- `bureau` : gestionnaire de fenêtres et barre de menu (ex. nwg-panel installé depuis git avec des correctifs locaux : fusion des branches, `git rerere`, retour arrière, relance proposée).
+- `outils-ia` : mise à jour d'Ollama par l'installeur officiel (`OLLAMA_MAJ=oui`), état du service conservé, retour à l'ancienne version en cas d'échec.
 - Actions proposées : en fin de passage, chaque commande des points d'attention est proposée (non par défaut, redémarrage en dernier, rien hors terminal) ; `acmechanic --actions` les repropose ; `ACMECHANIC_PROPOSER=non` pour désactiver.
 - Ascenseur : au moins `ACMECHANIC_LIGNES_MIN` (6) lignes par cadre ; si la grille dépasse l'écran, elle défile et les services terminés sont poussés vers le haut. Une dernière rangée incomplète prend toute la largeur.
 - Cadres rangés du plus rapide au plus lent selon les durées réelles du passage précédent (`~/logs/acmechanic/durees`).
