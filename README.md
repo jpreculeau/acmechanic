@@ -29,6 +29,7 @@
 - ⚡ **Parallèle et bridé** : un cgroup `systemd-run --user` par service (CPU, RAM, pids) + `nice`/`ionice`
 - 🖥️ **Tableau fixe** : une case par service, rangées du plus rapide (en haut à gauche) au plus lent d'après les durées réelles du passage précédent ; au moins 6 lignes de détail par cadre (`ACMECHANIC_LIGNES_MIN`) avec un ascenseur quand tout ne tient pas : les services terminés, en haut, sont poussés pour laisser voir ceux qui travaillent encore ; une dernière rangée incomplète prend toute la largeur ; lignes colorées comme à l'écran (sans horodatage), icônes Nerd Font, 16 couleurs du thème du terminal
 - 🔔 **Points d'attention** : toute action à faire par vous (micrologiciel, redémarrage, mise à jour non appliquée…) est regroupée en fin de passage, avec la commande à lancer — `point_attention` pour vos propres services
+- ▶️ **Actions proposées** : en fin de passage, Acmechanic propose de lancer chaque commande (non par défaut, redémarrage en dernier) ; lancé par cron, `acmechanic --actions` les repropose plus tard
 - 🔢 **Bilan lisible** : services mis à jour / inchangés / en échec, total des étapes, et versions dont seule la partie qui change est mise en évidence (façon nala)
 - 🌍 **Multilingue** : français et anglais (textes « dessin animé » compris), autres langues par simple catalogue
 - 🛡️ **Robuste** : verrous `flock`, délais par étape, watchdog anti-fige, Ctrl+C / fermeture de terminal qui arrêtent proprement tout l'arbre
@@ -70,6 +71,7 @@ acmechanic --liste      # ce qui serait fait, sans rien faire
 | `--systeme` | Uniquement le système (Nala, ou APT) |
 | `--liste` | Services détectés, écartés, ordre imposé — sans rien exécuter |
 | `--themes` | Aperçu des thèmes d'affichage |
+| `--actions` | Reproposer les actions du dernier passage (points d'attention) |
 | `--version` | Version |
 | `--aide`, `-h` | Aide |
 
@@ -80,6 +82,7 @@ Le code de sortie est le **nombre d'étapes en échec** (0 = tout va bien) : pra
 | `ACMECHANIC_TABLEAU=non` | Affichage ligne à ligne (automatique hors terminal) |
 | `ACMECHANIC_ICONES=non` | Symboles Unicode simples au lieu des icônes Nerd Font |
 | `LIMITES_RESSOURCES=non` | Pas de cgroup ni de `nice`/`ionice` |
+| `ACMECHANIC_PROPOSER=non` | Ne pas proposer de lancer les actions en fin de passage |
 | `ACMECHANIC_LIGNES_MIN=8` | Lignes de détail minimum par cadre (défaut 6) ; au-delà de l'écran, la grille défile |
 | `ACMECHANIC_THEME=kaiju` | Thème d'affichage (`acmechanic --themes` pour la liste) |
 | `ACMECHANIC_LANGUE=en` | Langue de l'affichage (`fr`, `en`… ; défaut : celle du système, anglais à défaut) |

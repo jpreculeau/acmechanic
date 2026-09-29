@@ -38,6 +38,15 @@ MSG=(
 	[titre_attention]="Points d'attention"
 	[titre_erreurs]="Erreurs"
 	[attention_commande]="à lancer : %s"
+	# --- Actions proposees en fin de passage ---
+	[titre_actions]="Actions proposées"
+	[question_action]="%s : lancer « %s » ? [o/N] "
+	[reponses_oui]="oOyY"
+	[action_ok]="Fait."
+	[action_echec]="Échec (code %d)."
+	[action_plus_tard]="Pour y revenir plus tard : acmechanic --actions"
+	[action_redemarrage]="redémarre la machine, proposé en dernier"
+	[aucune_action]="Aucune action en attente."
 	[titre_versions]="Versions"
 	# --- Fin ---
 	[fin_ok]="Rideau ! Tout est en ordre."

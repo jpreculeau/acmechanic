@@ -56,6 +56,7 @@ OPTIONS
     --systeme     uniquement le systeme (Nala, ou APT)
     --liste       ce qui serait fait, sans rien faire
     --themes      themes d'affichage disponibles (ACMECHANIC_THEME)
+    --actions     reproposer les actions du dernier passage
     --version     version
     --aide, -h    cette aide
 
@@ -242,10 +243,20 @@ case "${1:-}" in
 	echo "Journal : $LOG_FILE"
 	exit 0
 	;;
+--actions)
+	# Points d'attention du dernier passage (lance par cron, par exemple).
+	if [ -s "$LOG_DIR/attention" ]; then
+		rapport_attention "$LOG_DIR/attention"
+		proposer_actions "$LOG_DIR/attention"
+	else
+		t aucune_action; echo
+	fi
+	exit 0
+	;;
 "") ;;
 *)
 	err "Option inconnue : $1"
-	echo "Options : --services, --systeme, --liste, --themes, --version, --aide"
+	echo "Options : --services, --systeme, --liste, --themes, --actions, --version, --aide"
 	exit 1
 	;;
 esac
@@ -634,6 +645,19 @@ auto_mise_a_jour() {
 	point_attention "$(t att_auto_maj "$n" "$raison")" "git -C $d pull --ff-only"
 }
 
+# conserver_et_proposer : garde les points d'attention du passage
+# (acmechanic --actions), puis propose de lancer leurs commandes.
+conserver_et_proposer() {
+	if [ -s "$FICHIER_ATTENTION" ]; then
+		cp "$FICHIER_ATTENTION" "$LOG_DIR/attention"
+		proposer_actions "$FICHIER_ATTENTION"
+		[ -t 1 ] && { echo; printf ' %s%s%s\n' "$_T_TERNE" "$(t action_plus_tard)" "$_T_RAZ"; }
+	else
+		rm -f "$LOG_DIR/attention"
+	fi
+	return 0
+}
+
 # Fin de l'affichage fixe : dernier dessin, retour a l'ecran normal.
 if [ "$TABLEAU" = oui ]; then
 	tableau_arreter
@@ -683,6 +707,7 @@ if [ "$TABLEAU" = oui ]; then
 	printf ' %s%s %s%s\n' "$_T_TERNE" "${_ICONE_STATUT[DOSSIER]}" "$(t journal "$LOG_FILE")" "$_T_RAZ"
 	tableau_versions "$FICHIER_VERSIONS"
 	tableau_fin "$code"
+	conserver_et_proposer
 	# Memes informations dans le journal que l'affichage classique.
 	{
 		printf '[%(%Y-%m-%d %H:%M:%S)T] %-7s %s\n' -1 INFO "Fin de Acmechanic : $code etape(s) en echec"
@@ -692,6 +717,7 @@ if [ "$TABLEAU" = oui ]; then
 fi
 rapport_versions
 rapport_attention "$FICHIER_ATTENTION"
+conserver_et_proposer
 
 echo
 if [ "$code" -eq 0 ]; then

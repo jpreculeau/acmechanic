@@ -444,6 +444,59 @@ rapport_attention() {
 	return 0
 }
 
+# proposer_actions <fichier> : pour chaque point d'attention qui porte une
+# commande, demande s'il faut la lancer maintenant (non par defaut). Une
+# commande qui redemarre la machine est proposee en dernier. Rien n'est
+# demande hors terminal (cron) : `acmechanic --actions` y revient plus tard.
+# ACMECHANIC_PROPOSER : oui (defaut) | non | force (tests : reponses lues
+# sur l'entree standard, sans terminal).
+proposer_actions() {
+	local f="$1" mode="${ACMECHANIC_PROPOSER:-oui}" entree=/dev/tty ligne nom msg cmd rep code
+	local -a actions=() fin=() deja=()
+	[ -s "$f" ] || return 0
+	case "$mode" in
+	non) return 0 ;;
+	force) entree=/dev/stdin ;;
+	*) { [ -t 1 ] && [ -r /dev/tty ] && : </dev/tty; } 2>/dev/null || return 0 ;;
+	esac
+	while IFS= read -r ligne; do
+		IFS=$'\x1f' read -r nom msg cmd <<<"$ligne"
+		[ -n "$cmd" ] || continue
+		[[ " ${deja[*]} " == *" $cmd "* ]] && continue # une commande, une fois
+		deja+=("$cmd")
+		if [[ "$cmd" =~ (^|[^[:alnum:]])(reboot|poweroff|shutdown)([^[:alnum:]]|$) ]]; then
+			fin+=("$ligne")
+		else
+			actions+=("$ligne")
+		fi
+	done <"$f"
+	actions+=("${fin[@]}")
+	[ ${#actions[@]} -gt 0 ] || return 0
+	echo
+	printf ' %s%s%s\n' "$C_BOLD" "$(t titre_actions)" "$C_OFF"
+	for ligne in "${actions[@]}"; do
+		IFS=$'\x1f' read -r nom msg cmd <<<"$ligne"
+		[[ " ${fin[*]} " == *"$cmd"* ]] && printf '  (%s)\n' "$(t action_redemarrage)"
+		printf '  %s' "$(t question_action "$nom" "$cmd")"
+		rep=""
+		read -r rep <"$entree" || rep=""
+		if [ -z "$rep" ] || [[ "${MSG[reponses_oui]}" != *"${rep:0:1}"* ]]; then
+			continue
+		fi
+		log "Action acceptee ($nom) : $cmd"
+		bash -c "$cmd" <"$entree"
+		code=$?
+		if [ "$code" -eq 0 ]; then
+			printf '  %s%s%s\n' "$C_GREEN" "$(t action_ok)" "$C_OFF"
+			log "Action reussie : $cmd"
+		else
+			printf '  %s%s%s\n' "$C_RED" "$(t action_echec "$code")" "$C_OFF"
+			log "Action en echec (code $code) : $cmd"
+		fi
+	done
+	return 0
+}
+
 # Statut global du script de service, communique a l'orchestrateur (Acmechanic)
 # via le fichier de compteurs partage. Acmechanic l'affiche dans son bilan a
 # la place du vague « OK ».

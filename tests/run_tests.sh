@@ -202,6 +202,21 @@ out="$(bash -c 'SERVICE_NAME=att; source "$ACMECHANIC_HOME/lib/common.sh"; point
 check "rapport_attention : message et commande" grep -q 'A faire' <<<"$out"
 check "rapport_attention : commande avec | intacte" grep -qF 'curl x | sh' <<<"$out"
 
+A="$TMP/actions"
+{
+	printf 'svc\x1fRedemarrage requis\x1fsudo reboot\n'
+	printf 'svc\x1fA faire\x1ftouch %s/fait1\n' "$TMP"
+	printf 'svc\x1fAutre\x1ftouch %s/fait2\n' "$TMP"
+	printf 'svc\x1fDoublon\x1ftouch %s/fait1\n' "$TMP"
+	printf 'svc\x1fSans commande\x1f\n'
+} >"$A"
+out="$(printf 'o\nn\nn\n' | ACMECHANIC_PROPOSER=force ACMECHANIC_LANGUE=fr bash -c 'SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"; proposer_actions "$1"' _ "$A" 2>/dev/null)"
+check "actions : acceptee => lancee" test -e "$TMP/fait1"
+check "actions : refusee => rien" not test -e "$TMP/fait2"
+check "actions : redemarrage propose en dernier" eq "$(grep -o 'lancer « [^»]*»' <<<"$out" | tr '\n' ';')" "lancer « touch $TMP/fait1 »;lancer « touch $TMP/fait2 »;lancer « sudo reboot »;"
+out="$(ACMECHANIC_PROPOSER=oui bash -c 'SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"; proposer_actions "$1"' _ "$A" </dev/null 2>&1)"
+check "actions : rien demande hors terminal" eq "$out" ""
+
 echo "sauvegardes (lib/backup.sh)"
 out="$(bash -c '
 	SERVICE_NAME=test
