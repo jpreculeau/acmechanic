@@ -35,6 +35,14 @@ source "${ACMECHANIC_HOME}/lib/backup.sh"
 
 prendre_verrou "$SERVICE_NAME"
 
+# etape <libelle> <delai> cmd... : comme run_etape (comptage, delai,
+# journal), mais renvoie 1 si l'etape a echoue : run_etape rend toujours 0.
+etape() {
+	local echecs=$NB_ECHEC
+	run_etape "$@"
+	[ "$NB_ECHEC" -eq "$echecs" ]
+}
+
 # docker_preparer <titre> <projet> : titre, dependances, compose present.
 # Sort du script (code 1) si un prerequis manque.
 docker_preparer() {

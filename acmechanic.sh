@@ -37,7 +37,7 @@
 # (run_etape) et n'interrompt pas la suite.
 set -uo pipefail
 
-readonly ACMECHANIC_VERSION="1.0.0"
+readonly ACMECHANIC_VERSION="1.1.0"
 # readlink -f : fonctionne aussi via un lien symbolique (/usr/local/bin/acmechanic)
 ACMECHANIC_HOME="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # Exporte : les scripts de service le lisent pour trouver lib/.
@@ -610,10 +610,40 @@ fi
 rapport_final "Bilan de la mise a jour globale"
 code=$?
 
+# ---------------------------------------------------------------------
+# auto_mise_a_jour : Acmechanic se met a jour lui-meme, EN FIN de run
+# (jamais pendant : les services en cours liraient un melange de deux
+# versions de lib/). Avance rapide seulement, arbre propre seulement ;
+# la nouvelle version sert au prochain lancement.
+# ACMECHANIC_AUTO_MAJ : oui (defaut) | signaler | non
+# ---------------------------------------------------------------------
+auto_mise_a_jour() {
+	local mode="${ACMECHANIC_AUTO_MAJ:-oui}" d="$ACMECHANIC_HOME" n avant
+	[ "$mode" = non ] && return 0
+	git -C "$d" rev-parse -q --verify '@{u}' >/dev/null 2>&1 || return 0
+	if ! timeout 60 git -C "$d" fetch -q 2>/dev/null; then
+		warn "Acmechanic : depot distant injoignable, auto-mise a jour sautee."
+		return 0
+	fi
+	n="$(git -C "$d" rev-list --count 'HEAD..@{u}' 2>/dev/null || echo 0)"
+	[ "$n" -eq 0 ] && return 0
+	avant="$(git -C "$d" rev-parse --short HEAD)"
+	if [ "$mode" != oui ]; then
+		warn "Acmechanic : $n commit(s) disponible(s) (ACMECHANIC_AUTO_MAJ=$mode) : git -C $d pull --ff-only"
+	elif [ -n "$(git -C "$d" status --porcelain --untracked-files=no)" ]; then
+		warn "Acmechanic : $n commit(s) disponible(s), non appliques : modifications locales dans $d."
+	elif git -C "$d" merge -q --ff-only '@{u}' 2>/dev/null; then
+		ok "Acmechanic mis a jour ($avant -> $(git -C "$d" rev-parse --short HEAD), $n commit(s)) : actif au prochain lancement."
+	else
+		warn "Acmechanic : mise a jour disponible mais historique local divergent, non appliquee."
+	fi
+}
+
 # Bloc récapitulatif des versions avant -> après.
 if [ "$TABLEAU" = oui ]; then
 	tableau_versions "$FICHIER_VERSIONS"
 	tableau_fin "$code"
+	auto_mise_a_jour
 	# Memes informations dans le journal que l'affichage classique.
 	{
 		printf '[%(%Y-%m-%d %H:%M:%S)T] %-7s %s\n' -1 INFO "Fin de Acmechanic : $code etape(s) en echec"
@@ -622,6 +652,7 @@ if [ "$TABLEAU" = oui ]; then
 	exit "$code"
 fi
 rapport_versions
+auto_mise_a_jour
 
 echo
 if [ "$code" -eq 0 ]; then

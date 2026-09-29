@@ -27,7 +27,7 @@ for f in "$ROOT"/acmechanic.sh "$ROOT"/restore.sh "$ROOT"/config.sh "$ROOT"/lib/
 done
 
 echo "options"
-check "--version" eq "$("$ROOT/acmechanic.sh" --version)" "acmechanic 1.0.0"
+check "--version" eq "$("$ROOT/acmechanic.sh" --version)" "acmechanic 1.1.0"
 check "--aide mentionne --liste" grep -q -- '--liste' <("$ROOT/acmechanic.sh" --aide)
 check "option inconnue => code 1" not bash -c '"$1" --nimportequoi >/dev/null 2>&1' _ "$ROOT/acmechanic.sh"
 
@@ -68,6 +68,62 @@ for d in "$ROOT"/bibliotheque/*/; do
 	check "bibliotheque/$n : script nomme comme son dossier" test -x "$d/$n.sh"
 	check "bibliotheque/$n : source lib/service.sh" grep -q 'lib/service.sh' "$d/$n.sh"
 done
+
+echo "mises a jour git (auto-mise a jour, depots-git)"
+# Copie du dossier de travail dans un depot jetable + un amont nu.
+G="$TMP/git"; mkdir -p "$G"
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+nouveau_depot() {  # nouveau_depot <nom> [source] : clone <nom> + amont <nom>.git
+	local n="$1" src="${2:-}"
+	mkdir -p "$G/$n.src"
+	if [ -n "$src" ]; then (cd "$src" && tar cf - --exclude=.git . ) | tar xf - -C "$G/$n.src"
+	else echo v1 >"$G/$n.src/f"; fi
+	git -C "$G/$n.src" init -q -b main && git -C "$G/$n.src" add -A && git -C "$G/$n.src" commit -qm v1
+	git clone -q --bare "$G/$n.src" "$G/$n.git" && git clone -q "$G/$n.git" "$G/$n"
+	git -C "$G/$n.src" remote add origin "$G/$n.git"
+}
+publier() {  # publier <nom> : un commit de plus dans l'amont
+	echo "$RANDOM" >>"$G/$1.src/f" && git -C "$G/$1.src" add -A &&
+		git -C "$G/$1.src" commit -qm suite && git -C "$G/$1.src" push -q origin main
+}
+nouveau_depot acm "$ROOT"; publier acm
+mkdir -p "$TMP/vide"
+( cd "$G/acm" && SERVICES_DIR="$TMP/vide" ORDRE_DIR="$TMP/vide" ./acmechanic.sh --services >/dev/null 2>&1 )
+check "auto-mise a jour : avance rapide appliquee" eq "$(git -C "$G/acm" rev-parse HEAD)" "$(git -C "$G/acm.git" rev-parse HEAD)"
+publier acm; echo local >>"$G/acm/README.md"
+( cd "$G/acm" && SERVICES_DIR="$TMP/vide" ORDRE_DIR="$TMP/vide" ./acmechanic.sh --services >/dev/null 2>&1 )
+check "auto-mise a jour : modifications locales preservees" not test "$(git -C "$G/acm" rev-parse HEAD)" = "$(git -C "$G/acm.git" rev-parse HEAD)"
+git -C "$G/acm" checkout -q README.md
+nouveau_depot outil; publier outil
+nouveau_depot sale; publier sale; echo local >>"$G/sale/f"
+printf 'DEPOTS_GIT=("%s" "%s" "%s")\nCHEZMOI_VERIFIER=non\n' "$G/outil" "$G/sale" "$G/acm" >"$G/acm/local.conf"
+env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depots-git.sh" >/dev/null 2>&1; rc=$?
+out="$(cat "$LOG_DIR/depots-git.log")"
+check "depots-git : code 0" eq "$rc" "0"
+check "depots-git : depot propre mis a jour" eq "$(git -C "$G/outil" rev-parse HEAD)" "$(git -C "$G/outil.git" rev-parse HEAD)"
+check "depots-git : depot modifie laisse intact" grep -q 'sale : 1 commit(s) disponible(s), non appliques' <<<"$out"
+check "depots-git : Acmechanic laisse a l'auto-mise a jour" grep -q 'se met a jour lui-meme' <<<"$out"
+
+echo "micrologiciel, nettoyage, outils-ia, acmefrag (bouchons)"
+B="$TMP/bouchons"; mkdir -p "$B"
+printf '#!/bin/sh\necho "BOOTLOADER: update available"\necho "   CURRENT: jeu. 1 (1)"\necho "    LATEST: ven. 2 (2)"\nexit 1\n' >"$B/rpi-eeprom-update"
+chmod +x "$B/rpi-eeprom-update"
+PATH="$B:$PATH" "$ROOT/bibliotheque/micrologiciel/micrologiciel.sh" >/dev/null 2>&1; rc=$?
+out="$(cat "$LOG_DIR/micrologiciel.log")"
+check "micrologiciel : EEPROM signalee sans echec" eq "$rc" "0"
+check "micrologiciel : commande a lancer indiquee" grep -q 'rpi-eeprom-update -a' <<<"$out"
+L="$TMP/lg"; mkdir -p "$L/foo" "$L/nettoyage"
+head -c 3145728 /dev/zero >"$L/foo/foo.log"; head -c 3145728 /dev/zero >"$L/foo/autre.log"
+LOG_DIR="$L/nettoyage" NETTOYAGE_DOCKER=non NETTOYAGE_JOURNAL=non NETTOYAGE_PAQUETS=non \
+	NETTOYAGE_VIGNETTES_JOURS=0 NETTOYAGE_LOG_MO=1 "$ROOT/bibliotheque/nettoyage/nettoyage.sh" >/dev/null 2>&1
+check "nettoyage : journal de service raccourci" eq "$(stat -c %s "$L/foo/foo.log")" "524288"
+check "nettoyage : autre fichier intact" eq "$(stat -c %s "$L/foo/autre.log")" "3145728"
+printf '#!/bin/sh\ncase "$1" in --version) cat "%s/v" ;; update) echo 2.0 >"%s/v" ;; esac\n' "$B" "$B" >"$B/claude"
+chmod +x "$B/claude"; echo 1.0 >"$B/v"
+out="$(PATH="$B:$PATH" IA_OUTILS=claude "$ROOT/bibliotheque/outils-ia/outils-ia.sh" 2>&1)"; rc=$?
+check "outils-ia : claude mis a jour" eq "$rc/$(cat "$B/v")" "0/2.0"
+out="$(ACMEFRAG_DOSSIER="$TMP/absent" "$ROOT/bibliotheque/acmefrag/acmefrag.sh" 2>&1)"; rc=$?
+check "acmefrag : absent => ignore, code 0" eq "$rc" "0"
 
 echo "configuration"
 mkdir -p "$TMP/home"

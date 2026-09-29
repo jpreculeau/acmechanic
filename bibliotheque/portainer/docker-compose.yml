@@ -1,0 +1,18 @@
+# Portainer CE — modèle. L'image ne contient ni shell ni curl : pas de
+# healthcheck Docker, la sonde HTTP de l'hôte (PORTAINER_URL) fait foi.
+services:
+  portainer:
+    image: portainer/portainer-ce:${PORTAINER_TAG:-latest}
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

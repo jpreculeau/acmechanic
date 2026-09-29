@@ -27,6 +27,14 @@
 # ARR_SERVICES=(sonarr radarr)
 # SONARR_CANAL=develop
 
+# --- Maintenance de la machine ---
+# DEPOTS_GIT=("$HOME/acmefrag" "$HOME/outils/mon-script")
+# IA_OUTILS="claude npm uv pipx pi hermes ollama"
+# IA_NPM=(@openai/codex @google/gemini-cli)
+# NETTOYAGE_JOURNAL=2weeks          # ou non
+# ACMEFRAG_CIBLE="/chemin/vers/disque/Videos"
+# ACMECHANIC_AUTO_MAJ=signaler      # oui (défaut) | signaler | non
+
 # --- Applications Flatpak sauvegardées (bibliotheque/flatpak) ---
 # FLATPAK_SAUVEGARDES=(
 # 	"monapp:org.exemple.MonApp"

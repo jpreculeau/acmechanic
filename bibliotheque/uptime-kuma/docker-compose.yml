@@ -1,0 +1,22 @@
+# Uptime Kuma — modèle.
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:${UPTIME_KUMA_TAG:-latest}
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "extra/healthcheck"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+      start_interval: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

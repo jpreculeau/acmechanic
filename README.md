@@ -5,7 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Bash](https://img.shields.io/badge/bash-%23121011.svg?style=flat&logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Platform](https://img.shields.io/badge/platform-Raspberry%20Pi%20%7C%20Debian-red)](https://www.raspberrypi.org/)
-[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.1.0-green.svg)](CHANGELOG.md)
 
 ## 📖 Description
 
@@ -19,7 +19,9 @@
 
 ### ✨ Fonctionnalités
 
-- 📚 **Bibliothèque de services** standardisés : Jellyfin, *arr, Syncthing, cross-seed, Beszel, Flatpak — réglables sans toucher au code
+- 📚 **Bibliothèque de services** standardisés : Jellyfin, Plex, *arr, Syncthing, Vaultwarden, Forgejo, Open WebUI… — réglables sans toucher au code
+- 🧹 **Maintenance de la machine** : vos dépôts git, outils d'IA, micrologiciel (signalé), nettoyage prudent, [AcmeFrag](https://github.com/jpreculeau/AcmeFrag)
+- 🔄 **Auto-mise à jour** d'Acmechanic en fin de run (avance rapide, jamais sur des modifications locales)
 - 🔍 **Découverte automatique** : tout script `services/<nom>/<nom>.sh` qui source `lib/common.sh` est un service — rien à déclarer
 - 🚦 **Mise à jour à bon escient** : l'image n'est tirée que si le registre (Docker Hub) a un digest plus récent, si la config compose a changé, ou si le conteneur est arrêté / tourne une ancienne image
 - 💾 **Sauvegardes vérifiables** : archive `.tar.gz` + manifeste SHA-256, rotation, restauration interactive avec filet de sécurité (`restore.sh`)
@@ -74,10 +76,11 @@ Le code de sortie est le **nombre d'étapes en échec** (0 = tout va bien) : pra
 | `ACMECHANIC_TABLEAU=non` | Affichage ligne à ligne (automatique hors terminal) |
 | `ACMECHANIC_ICONES=non` | Symboles Unicode simples au lieu des icônes Nerd Font |
 | `LIMITES_RESSOURCES=non` | Pas de cgroup ni de `nice`/`ionice` |
+| `ACMECHANIC_AUTO_MAJ=signaler` | Prévenir d'une nouvelle version d'Acmechanic sans l'appliquer (`non` : ne rien faire) |
 
 ### 📚 Bibliothèque et services maison
 
-La [bibliothèque](bibliotheque/README.md) fournit des services prêts à l'emploi (Jellyfin, Sonarr/Radarr/Prowlarr/Lidarr, Syncthing, cross-seed, Beszel, Flatpak) et leur `docker-compose.yml` modèle. On les active par un lien dans `services/`, et on les règle dans `local.conf` selon une convention unique : `<NOM>_PROJET`, `<NOM>_DONNEES`, `<NOM>_URL`, `<NOM>_CANAL`.
+La [bibliothèque](bibliotheque/README.md) fournit une vingtaine de services prêts à l'emploi : services Docker (Jellyfin, Plex, *arr, Syncthing, Vaultwarden, Forgejo, Open WebUI…) avec leur `docker-compose.yml` modèle, et maintenance de la machine (dépôts git, outils d'IA, micrologiciel, nettoyage, AcmeFrag, Flatpak). On les active par un lien dans `services/`, et on les règle dans `local.conf` selon une convention unique : `<NOM>_PROJET`, `<NOM>_DONNEES`, `<NOM>_URL`, `<NOM>_CANAL`.
 
 Un service maison est un script `services/<nom>/<nom>.sh`, exécutable, qui source `lib/service.sh` (ou `lib/common.sh`). Le plus simple : partir de [`bibliotheque/_modele`](bibliotheque/_modele/). Briques disponibles : `docker_standard`, `run_etape "libellé" <délai> cmd...`, `ignorer_etape`, `log`/`ok`/`warn`/`err`, `enregistrer_version`, `creer_sauvegarde`.
 
@@ -119,6 +122,7 @@ acmechanic/
 ├── services/              # VOS services (ignorés par git)
 ├── ordre.d/               # liens d'ordre (ignorés par git)
 ├── bibliotheque/          # services prêts à l'emploi + _modele
+├── ROADMAP.md
 └── tests/run_tests.sh
 ```
 
@@ -139,6 +143,10 @@ make check   # les deux
 | « docker-compose.yml introuvable » | Régler `<NOM>_PROJET` dans `local.conf`, ou partir du modèle `bibliotheque/<nom>/docker-compose.yml` |
 | « Une autre exécution … est déjà en cours » | Une exécution tourne encore (`/tmp/maintenance-<nom>.lock`) |
 | Détail d'un service | `~/logs/acmechanic/services/<nom>.sortie` |
+
+## 🗺️ Feuille de route
+
+Voir [ROADMAP.md](ROADMAP.md) — prochaine étape, la **1.5** : Fedora, Arch, openSUSE, Alpine.
 
 ## 📜 Licence
 

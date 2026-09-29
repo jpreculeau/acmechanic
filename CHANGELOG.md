@@ -3,6 +3,15 @@
 Toutes les évolutions notables d'Acmechanic sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [SemVer](https://semver.org/lang/fr/).
 
+## [1.1.0] - 2026-09-29
+
+### Ajouté
+- Bibliothèque : `plex`, `audiobookshelf`, `vaultwarden`, `uptime-kuma`, `forgejo`, `portainer`, `open-webui` (script + `docker-compose.yml` modèle).
+- Maintenance de la machine : `depots-git` (vos dépôts git en avance rapide, nouveautés chezmoi signalées), `outils-ia` (Claude Code, CLI npm, uv/pipx, pi.dev, Hermes ; Ollama signalé), `micrologiciel` (EEPROM Raspberry Pi et fwupd, signalés sans flasher), `nettoyage` (Docker sans volumes, journal, cache des paquets, journaux, vignettes), `acmefrag` (mise à jour, tests, mesure `--dry-run`).
+- Auto-mise à jour d'Acmechanic en fin de run (`ACMECHANIC_AUTO_MAJ=oui|signaler|non`).
+- `etape` (lib/service.sh) : comme `run_etape`, mais renvoie 1 en cas d'échec.
+- `ROADMAP.md` : 1.5 multi-distributions (dnf, pacman, zypper, apk).
+
 ## [1.0.0] - 2026-09-28
 
 Première version publique, extraite d'un usage quotidien sur Raspberry Pi.
