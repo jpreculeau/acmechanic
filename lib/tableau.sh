@@ -231,9 +231,16 @@ _tableau_disposition() {
 	_NRANG=$(((n + _NCOL - 1) / _NCOL))
 	_LARG=$(((cols - 1 - (_NCOL - 1)) / _NCOL))
 	# En-tete 2 lignes + 1 de marge ; chaque cadre = K + 2 bordures.
+	# Jamais moins de ACMECHANIC_LIGNES_MIN lignes de detail : si tout ne
+	# tient pas a l'ecran, la grille defile (ascenseur, _DEFIL=oui).
+	local kmin="${ACMECHANIC_LIGNES_MIN:-6}"
 	_K=$(((rows - 3) / _NRANG - 2))
-	[ "$_K" -lt 1 ] && _K=1
 	[ "$_K" -gt 12 ] && _K=12
+	_DEFIL=non
+	if [ "$_K" -lt "$kmin" ]; then
+		_K="$kmin"
+		_DEFIL=oui
+	fi
 }
 
 # tableau_possible <nb_lignes> : vrai si le tableau peut s'afficher.
@@ -242,8 +249,8 @@ tableau_possible() {
 	[ "${ACMECHANIC_TABLEAU:-oui}" = oui ] && [ -t 1 ] || return 1
 	read -r h w < <(stty size </dev/tty 2>/dev/null) || return 1
 	_tableau_disposition "$1" "${h:-0}" "${w:-0}"
-	# Au moins une ligne de detail par cadre et 40 colonnes par cadre.
-	[ $((3 + _NRANG * 3)) -le "${h:-0}" ] && [ "$_LARG" -ge 40 ]
+	# Au moins une rangee entiere a l'ecran et 40 colonnes par cadre.
+	[ $((3 + _K + 2)) -le "${h:-0}" ] && [ "$_LARG" -ge 40 ]
 }
 
 # _tableau_ligne_detail <ligne> <statut> <largeur> -> _LD (ligne coloree)
@@ -389,21 +396,66 @@ _tableau_dessiner() {
 	image+=$'\033[2K'"$ligne"$'\n\033[2K\n'
 	hauteur=2
 
-	# Grille : les cadres d'une meme rangee sont colles ligne a ligne.
+	# Grille : les cadres d'une meme rangee sont colles ligne a ligne. Une
+	# derniere rangee incomplete prend toute la largeur. Chaque ligne est
+	# completee jusqu'a l'avant-derniere colonne : la derniere porte
+	# l'ascenseur.
+	local larg_base="$_LARG" m vis pad r0=-1 total vue debut hc=$((_K + 2)) curseur taille
+	local -a toutes=()
 	for ((r = 0; r < _NRANG; r++)); do
 		grille=()
-		for ((j = 0; j < _NCOL; j++)); do
+		m=$((n - r * _NCOL))
+		[ "$m" -gt "$_NCOL" ] && m="$_NCOL"
+		if [ "$m" -lt "$_NCOL" ]; then
+			_LARG=$(((cols - 1 - (m - 1)) / m))
+		else
+			_LARG="$larg_base"
+		fi
+		for ((j = 0; j < m; j++)); do
 			i=$((r * _NCOL + j))
-			[ "$i" -lt "$n" ] || break
+			# Premiere rangee ou un service n'est pas fini : l'ascenseur
+			# s'y place (les services finis, rapides, sont au-dessus).
+			[ "$r0" -lt 0 ] && [ ! -f "$d/${TABLEAU_LIGNES[i]}.fin" ] && r0="$r"
 			_tableau_cadre "${TABLEAU_LIGNES[i]}" "$i"
 			for ((k = 0; k < ${#_CADRE_L[@]}; k++)); do
 				grille[k]+="${grille[k]:+ }${_CADRE_L[k]}"
 			done
 		done
+		vis=$((m * _LARG + m - 1))
+		printf -v pad '%*s' $((cols - 1 - vis > 0 ? cols - 1 - vis : 0)) ''
 		for ligne in "${grille[@]}"; do
-			image+=$'\033[2K'"$ligne"$'\n'
-			hauteur=$((hauteur + 1))
+			toutes+=("$ligne$pad")
 		done
+	done
+	_LARG="$larg_base"
+
+	# Fenetre (ascenseur) : tout ce qui tient, sinon a partir de la
+	# premiere rangee encore au travail ; les rangees terminees sont
+	# poussees vers le haut. Tout fini : les dernieres rangees.
+	total=${#toutes[@]}
+	vue=$((rows - 3))
+	debut=0
+	if [ "$total" -le "$vue" ]; then
+		vue="$total"
+	else
+		[ "$r0" -lt 0 ] && r0="$_NRANG"
+		debut=$((r0 * hc))
+		[ "$debut" -gt $((total - vue)) ] && debut=$((total - vue))
+		taille=$((vue * vue / total))
+		[ "$taille" -lt 1 ] && taille=1
+		curseur=$((debut * vue / total))
+	fi
+	for ((k = 0; k < vue; k++)); do
+		ligne="${toutes[debut + k]}"
+		if [ "$total" -gt "$vue" ] || [ "$debut" -gt 0 ]; then
+			if [ "$k" -ge "$curseur" ] && [ "$k" -lt $((curseur + taille)) ]; then
+				ligne+="${_T_CYAN}┃${_T_RAZ}"
+			else
+				ligne+="${_T_TERNE}│${_T_RAZ}"
+			fi
+		fi
+		image+=$'\033[2K'"$ligne"$'\n'
+		hauteur=$((hauteur + 1))
 	done
 	image+=$'\033[J'
 	printf '%s' "$image"

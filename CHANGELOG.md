@@ -14,6 +14,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 - Thèmes d'affichage en français et en anglais : `droides`, `kaiju`, `matrice`, `cyborg`, `delorean`, `vaisseau` (`ACMECHANIC_THEME`, aperçu : `acmechanic --themes`).
 - Langues : catalogues `locale/fr.sh` et `locale/en.sh`, `ACMECHANIC_LANGUE`, autres langues par simple catalogue (test de complétude).
 - Points d'attention : `point_attention "message" "commande"` pour tout service, regroupés en fin de passage (redémarrage requis, micrologiciel, auto-mise à jour non appliquée…).
+- Ascenseur : au moins `ACMECHANIC_LIGNES_MIN` (6) lignes par cadre ; si la grille dépasse l'écran, elle défile et les services terminés sont poussés vers le haut. Une dernière rangée incomplète prend toute la largeur.
 - Cadres rangés du plus rapide au plus lent selon les durées réelles du passage précédent (`~/logs/acmechanic/durees`).
 
 ### Modifié

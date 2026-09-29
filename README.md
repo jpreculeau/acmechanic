@@ -27,7 +27,7 @@
 - 💾 **Sauvegardes vérifiables** : archive `.tar.gz` + manifeste SHA-256, rotation, restauration interactive avec filet de sécurité (`restore.sh`)
 - 🩺 **Santé réelle** : attente du `healthy` Docker (sonde définie par le service), repli sur une URL
 - ⚡ **Parallèle et bridé** : un cgroup `systemd-run --user` par service (CPU, RAM, pids) + `nice`/`ionice`
-- 🖥️ **Tableau fixe** : une case par service, rangées du plus rapide (en haut à gauche) au plus lent d'après les durées réelles du passage précédent ; lignes de détail pré-dimensionnées, colorées comme à l'écran (sans horodatage), icônes Nerd Font, 16 couleurs du thème du terminal
+- 🖥️ **Tableau fixe** : une case par service, rangées du plus rapide (en haut à gauche) au plus lent d'après les durées réelles du passage précédent ; au moins 6 lignes de détail par cadre (`ACMECHANIC_LIGNES_MIN`) avec un ascenseur quand tout ne tient pas : les services terminés, en haut, sont poussés pour laisser voir ceux qui travaillent encore ; une dernière rangée incomplète prend toute la largeur ; lignes colorées comme à l'écran (sans horodatage), icônes Nerd Font, 16 couleurs du thème du terminal
 - 🔔 **Points d'attention** : toute action à faire par vous (micrologiciel, redémarrage, mise à jour non appliquée…) est regroupée en fin de passage, avec la commande à lancer — `point_attention` pour vos propres services
 - 🔢 **Bilan lisible** : services mis à jour / inchangés / en échec, total des étapes, et versions dont seule la partie qui change est mise en évidence (façon nala)
 - 🌍 **Multilingue** : français et anglais (textes « dessin animé » compris), autres langues par simple catalogue
@@ -80,6 +80,7 @@ Le code de sortie est le **nombre d'étapes en échec** (0 = tout va bien) : pra
 | `ACMECHANIC_TABLEAU=non` | Affichage ligne à ligne (automatique hors terminal) |
 | `ACMECHANIC_ICONES=non` | Symboles Unicode simples au lieu des icônes Nerd Font |
 | `LIMITES_RESSOURCES=non` | Pas de cgroup ni de `nice`/`ionice` |
+| `ACMECHANIC_LIGNES_MIN=8` | Lignes de détail minimum par cadre (défaut 6) ; au-delà de l'écran, la grille défile |
 | `ACMECHANIC_THEME=kaiju` | Thème d'affichage (`acmechanic --themes` pour la liste) |
 | `ACMECHANIC_LANGUE=en` | Langue de l'affichage (`fr`, `en`… ; défaut : celle du système, anglais à défaut) |
 | `ACMECHANIC_AUTO_MAJ=signaler` | Prévenir d'une nouvelle version d'Acmechanic sans l'appliquer (`non` : ne rien faire) |

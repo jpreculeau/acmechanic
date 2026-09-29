@@ -139,9 +139,11 @@ echo "affichage (lib/tableau.sh)"
 # shellcheck source=../lib/tableau.sh
 source "$ROOT/lib/tableau.sh"
 _tableau_disposition 4 24 80
-check "80x24, 4 services : 1 colonne" eq "$_NCOL/$_NRANG/$_K" "1/4/3"
+check "80x24, 4 services : 1 colonne, 6 lignes minimum, ascenseur" eq "$_NCOL/$_NRANG/$_K/$_DEFIL" "1/4/6/oui"
+ACMECHANIC_LIGNES_MIN=2 _tableau_disposition 4 24 80
+check "ACMECHANIC_LIGNES_MIN=2 : tout tient" eq "$_K/$_DEFIL" "3/non"
 _tableau_disposition 9 50 200
-check "200x50, 9 services : 3 colonnes, detail plafonne a 12" eq "$_NCOL/$_NRANG/$_K" "3/3/12"
+check "200x50, 9 services : 3 colonnes, detail plafonne a 12" eq "$_NCOL/$_NRANG/$_K/$_DEFIL" "3/3/12/non"
 _tableau_cadrer "école" 8
 check "cadrage en caracteres (accents)" eq "${#_CADRE}" "8"
 _tableau_duree 125
