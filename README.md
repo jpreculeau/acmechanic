@@ -27,7 +27,10 @@
 - 💾 **Sauvegardes vérifiables** : archive `.tar.gz` + manifeste SHA-256, rotation, restauration interactive avec filet de sécurité (`restore.sh`)
 - 🩺 **Santé réelle** : attente du `healthy` Docker (sonde définie par le service), repli sur une URL
 - ⚡ **Parallèle et bridé** : un cgroup `systemd-run --user` par service (CPU, RAM, pids) + `nice`/`ionice`
-- 🖥️ **Tableau fixe** : une case par service, lignes de détail pré-dimensionnées selon la fenêtre, icônes Nerd Font, 16 couleurs du thème du terminal
+- 🖥️ **Tableau fixe** : une case par service, rangées du plus rapide (en haut à gauche) au plus lent d'après les durées réelles du passage précédent ; lignes de détail pré-dimensionnées, colorées comme à l'écran (sans horodatage), icônes Nerd Font, 16 couleurs du thème du terminal
+- 🔔 **Points d'attention** : toute action à faire par vous (micrologiciel, redémarrage, mise à jour non appliquée…) est regroupée en fin de passage, avec la commande à lancer — `point_attention` pour vos propres services
+- 🔢 **Bilan lisible** : services mis à jour / inchangés / en échec, total des étapes, et versions dont seule la partie qui change est mise en évidence (façon nala)
+- 🌍 **Multilingue** : français et anglais (textes « dessin animé » compris), autres langues par simple catalogue
 - 🛡️ **Robuste** : verrous `flock`, délais par étape, watchdog anti-fige, Ctrl+C / fermeture de terminal qui arrêtent proprement tout l'arbre
 - 🐧 **Système** : Nala (ou APT en repli), rafraîchissement des dépôts anticipé pendant les services, signalement du redémarrage requis
 
@@ -76,15 +79,20 @@ Le code de sortie est le **nombre d'étapes en échec** (0 = tout va bien) : pra
 | `ACMECHANIC_TABLEAU=non` | Affichage ligne à ligne (automatique hors terminal) |
 | `ACMECHANIC_ICONES=non` | Symboles Unicode simples au lieu des icônes Nerd Font |
 | `LIMITES_RESSOURCES=non` | Pas de cgroup ni de `nice`/`ionice` |
+| `ACMECHANIC_LANGUE=en` | Langue de l'affichage (`fr`, `en`… ; défaut : celle du système, anglais à défaut) |
 | `ACMECHANIC_AUTO_MAJ=signaler` | Prévenir d'une nouvelle version d'Acmechanic sans l'appliquer (`non` : ne rien faire) |
 
 ### 📚 Bibliothèque et services maison
 
 La [bibliothèque](bibliotheque/README.md) fournit une vingtaine de services prêts à l'emploi : services Docker (Jellyfin, Plex, *arr, Syncthing, Vaultwarden, Forgejo, Open WebUI…) avec leur `docker-compose.yml` modèle, et maintenance de la machine (dépôts git, outils d'IA, micrologiciel, nettoyage, AcmeFrag, Flatpak). On les active par un lien dans `services/`, et on les règle dans `local.conf` selon une convention unique : `<NOM>_PROJET`, `<NOM>_DONNEES`, `<NOM>_URL`, `<NOM>_CANAL`.
 
-Un service maison est un script `services/<nom>/<nom>.sh`, exécutable, qui source `lib/service.sh` (ou `lib/common.sh`). Le plus simple : partir de [`bibliotheque/_modele`](bibliotheque/_modele/). Briques disponibles : `docker_standard`, `run_etape "libellé" <délai> cmd...`, `ignorer_etape`, `log`/`ok`/`warn`/`err`, `enregistrer_version`, `creer_sauvegarde`.
+Un service maison est un script `services/<nom>/<nom>.sh`, exécutable, qui source `lib/service.sh` (ou `lib/common.sh`). Le plus simple : partir de [`bibliotheque/_modele`](bibliotheque/_modele/). Briques disponibles : `docker_standard`, `point_attention "message" "commande"`, `run_etape "libellé" <délai> cmd...`, `ignorer_etape`, `log`/`ok`/`warn`/`err`, `enregistrer_version`, `creer_sauvegarde`.
 
 Pour imposer un ordre : `ln -s ../services/a/a.sh ordre.d/10-a.sh` (les services liés passent d'abord, dans l'ordre des préfixes).
+
+## 🌍 Langues
+
+Les textes affichés viennent de catalogues `locale/<langue>.sh` : `fr.sh` (référence) et `en.sh`. La langue suit `ACMECHANIC_LANGUE`, sinon celle du système (`LANG`), et l'anglais s'il n'existe pas de catalogue. **Ajouter une langue** : copier `locale/en.sh` en `locale/<code>.sh`, traduire, `make test` vérifie qu'aucune clé ne manque. Les messages du journal restent en français pour l'instant (voir la [feuille de route](ROADMAP.md)).
 
 ## ⚙️ Configuration
 
@@ -118,6 +126,8 @@ acmechanic/
 │   ├── common.sh          # journal, verrous, étapes, bridage, registre, gate Docker
 │   ├── backup.sh          # archives + manifeste SHA-256 + rotation
 │   ├── service.sh         # socle des services (docker_standard...)
+│   └── i18n.sh            # langues (t, tv)
+├── locale/                # catalogues fr.sh (référence), en.sh
 │   └── tableau.sh         # affichage fixe (cases, icônes, couleurs)
 ├── services/              # VOS services (ignorés par git)
 ├── ordre.d/               # liens d'ordre (ignorés par git)

@@ -27,6 +27,10 @@
 # ARR_SERVICES=(sonarr radarr)
 # SONARR_CANAL=develop
 
+# --- Affichage ---
+# ACMECHANIC_LANGUE=fr               # fr, en... (défaut : langue du système)
+# declare -A ICONES_SERVICES=([mon-app]=$'\xef\x80\x95')   # icône Nerd Font d'un cadre
+
 # --- Maintenance de la machine ---
 # DEPOTS_GIT=("$HOME/acmefrag" "$HOME/outils/mon-script")
 # IA_OUTILS="claude npm uv pipx pi hermes ollama"

@@ -79,4 +79,4 @@ cp -r bibliotheque/_modele services/mon-app
 mv services/mon-app/_modele.sh services/mon-app/mon-app.sh
 ```
 
-Adaptez `SERVICE_NAME`, les réglages et l'appel `docker_standard <conteneur> <image:canal> <url> <données> <éléments...>`. Plusieurs conteneurs : un appel par conteneur (voir `arr`, `beszel`). Pour une étape dont le succès conditionne la suite : `etape "libellé" <délai> cmd...` (renvoie 1 en cas d'échec). Un service utile aux autres ? Les PR sont bienvenues.
+Adaptez `SERVICE_NAME`, les réglages et l'appel `docker_standard <conteneur> <image:canal> <url> <données> <éléments...>`. Plusieurs conteneurs : un appel par conteneur (voir `arr`, `beszel`). Pour une étape dont le succès conditionne la suite : `etape "libellé" <délai> cmd...` (renvoie 1 en cas d'échec). Pour une action que l'utilisateur doit faire lui-même : `point_attention "message" "commande à lancer"` — elle apparaît dans le bloc « Points d'attention » du bilan. Un service utile aux autres ? Les PR sont bienvenues.

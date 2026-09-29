@@ -61,11 +61,13 @@ maj_depot() {
 		return
 	fi
 	if [ "$DEPOTS_APPLIQUER" != oui ]; then
-		warn "$nom : $n commit(s) disponible(s), non appliques (DEPOTS_APPLIQUER=non)."
+		point_attention "$nom : $n commit(s) disponible(s), non appliques (DEPOTS_APPLIQUER=non)" \
+			"git -C $depot pull --ff-only"
 		return
 	fi
 	if [ -n "$(git -C "$depot" status --porcelain --untracked-files=no)" ]; then
-		warn "$nom : $n commit(s) disponible(s), non appliques : modifications locales."
+		point_attention "$nom : $n commit(s) disponible(s), non appliques : modifications locales" \
+			"git -C $depot status"
 		return
 	fi
 	if etape "$nom : avance rapide ($n commit(s))" 120 git -C "$depot" merge -q --ff-only '@{u}'; then
@@ -86,12 +88,12 @@ verifier_chezmoi() {
 	etape "chezmoi : recherche de nouveautes" 90 git -C "$source" fetch -q || return
 	n="$(retard "$source")"
 	if [ "$n" -gt 0 ]; then
-		warn "chezmoi : $n commit(s) en attente dans le depot source. A appliquer a la main : chezmoi update"
+		point_attention "chezmoi : $n commit(s) en attente dans le depot source" "chezmoi update"
 	else
 		inchanger_etape "chezmoi" "depot source a jour"
 	fi
 	if [ -n "$(chezmoi status 2>/dev/null)" ]; then
-		warn "chezmoi : des fichiers different de la source (voir : chezmoi status)."
+		point_attention "chezmoi : des fichiers different de la source" "chezmoi status"
 	fi
 }
 

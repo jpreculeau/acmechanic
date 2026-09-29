@@ -11,6 +11,10 @@ _COMMON_SH_LOADED=1
 
 set -o pipefail
 
+# Textes affiches dans la langue de l'utilisateur (t, tv : lib/i18n.sh).
+# shellcheck source=i18n.sh
+source "$(dirname "${BASH_SOURCE[0]}")/i18n.sh"
+
 # --- Arret propre sur interruption (Ctrl+C) et fige ---
 # Installe un trap INT/TERM et un watchdog. Le trap tue recursivement
 # tous les descendants du script (sous-shells run_etape, docker compose,
@@ -230,16 +234,18 @@ _log_raw() {
         ATTENTION | ERREUR) printf '%s %s\n' "$prefix" "$msg" >>"$ACMECHANIC_ETAT_FICHIER.alertes" 2>/dev/null ;;
         esac
         # Et dans la sortie standard (= <service>.sortie) : le detail
-        # affiche sous la ligne du service melange ainsi, dans l'ordre,
-        # les etapes et la sortie des commandes.
-        printf '%s %s\n' "${stamp#* }" "$msg"
+        # affiche dans le cadre du service melange ainsi, dans l'ordre,
+        # les etapes et la sortie des commandes. Le niveau est encadre de
+        # separateurs \x1f (invisibles) : le tableau en tire couleur et
+        # icone, comme a l'ecran. Pas d'horodatage : le journal l'a.
+        printf '\x1f%s\x1f%s\n' "$prefix" "$msg"
     # Ecrire au terminal meme si la sortie standard est redirigee
     elif [ -t 1 ]; then
-        printf '%s%s %-7s %s%s\n' "$color" "[$stamp]" "$prefix" "$tty_msg" "$C_OFF"
+        printf '%s%-9s %s%s\n' "$color" "$prefix" "$tty_msg" "$C_OFF"
     else
         # La sortie est redirigee, essayer d'ecrire a /dev/tty
         # Silencieusement : si /dev/tty n'est pas disponible, seul le fichier de log est ecrit
-        { printf '%s%s %-7s %s%s\n' "$color" "[$stamp]" "$prefix" "$tty_msg" "$C_OFF" > /dev/tty; } 2>/dev/null || true
+        { printf '%s%-9s %s%s\n' "$color" "$prefix" "$tty_msg" "$C_OFF" > /dev/tty; } 2>/dev/null || true
     fi
     printf '%s %-7s %s\n' "[$stamp]" "$prefix" "$msg" >>"$LOG_FILE"
 }
@@ -378,6 +384,64 @@ incrementer_compteur() {
 }
 
 
+# ajouter_compteur <cle> <quantite> : ajoute une quantite a un compteur
+# partage (sous verrou). Sert au total des etapes de tous les services.
+ajouter_compteur() {
+	local cle="$1" n="$2" f
+	f="$(compteurs_fichier)"
+	[ -z "$f" ] || [ "${n:-0}" -eq 0 ] && return 0
+	touch "$f" 2>/dev/null || return 0
+	_sous_verrou "$f" sh -c '
+		v=$(grep "^$1=" "$3" 2>/dev/null | cut -d= -f2)
+		v=$(( ${v:-0} + $2 ))
+		if grep -q "^$1=" "$3"; then sed -i "s/^$1=.*/$1=$v/" "$3"
+		else printf "%s=%s\n" "$1" "$v" >> "$3"; fi
+	' sh "$cle" "$n" "$f" 2>/dev/null || return 0
+}
+
+# --- Points d'attention ---
+# point_attention <message> [commande] : une action A FAIRE PAR
+# L'UTILISATEUR (mise a jour a appliquer a la main, redemarrage...), a
+# distinguer d'un simple avertissement de deroulement (warn). Journalise
+# comme un warn, et repris a la fin :
+#   - sous Acmechanic : dans le bloc « Points d'attention » du bilan
+#     global (fichier partage ACMECHANIC_ATTENTION_FICHIER) ;
+#   - script lance seul : a la fin de son bilan (bilan_service).
+declare -a _ATTENTION_LOCALE=()
+point_attention() {
+	local msg="$1" cmd="${2:-}" f="${ACMECHANIC_ATTENTION_FICHIER:-}"
+	warn "$msg${cmd:+ -> $cmd}"
+	msg="${msg//|/ }" cmd="${cmd//|/ }"
+	_ATTENTION_LOCALE+=("$SERVICE_NAME|$msg|$cmd")
+	[ -n "$f" ] || return 0
+	_sous_verrou "$f" sh -c 'printf "%s|%s|%s\n" "$1" "$2" "$3" >>"$4"' \
+		sh "$SERVICE_NAME" "$msg" "$cmd" "$f" 2>/dev/null || true
+}
+
+# rapport_attention [fichier] : affiche les points d'attention, groupes
+# par service (ceux du fichier partage, sinon ceux du script courant).
+rapport_attention() {
+	local f="${1:-}" nom msg cmd icone="!" fleche="->" gras="$C_BOLD" jaune="$C_YELLOW" terne="" raz="$C_OFF"
+	local -a lignes=()
+	if [ -n "$f" ]; then
+		[ -s "$f" ] && mapfile -t lignes <"$f"
+	else
+		lignes=("${_ATTENTION_LOCALE[@]}")
+	fi
+	[ ${#lignes[@]} -gt 0 ] || return 0
+	if declare -p _ICONE_STATUT >/dev/null 2>&1; then
+		icone="${_ICONE_STATUT[ATTENTION]}" fleche="${_ICONE_STATUT[FLECHE]}" terne="$_T_TERNE"
+	fi
+	echo
+	printf ' %s%s%s %s%s\n' "$gras" "$jaune" "$icone" "$(t titre_attention)" "$raz"
+	for ligne in "${lignes[@]}"; do
+		IFS='|' read -r nom msg cmd <<<"$ligne"
+		printf '  %s%s%s %s%-14s%s %s\n' "$jaune" "$icone" "$raz" "$gras" "$nom" "$raz" "$msg"
+		[ -n "$cmd" ] && printf '  %17s%s%s %s%s\n' "" "$terne" "$fleche" "$(t attention_commande "$cmd")" "$raz"
+	done
+	return 0
+}
+
 # Statut global du script de service, communique a l'orchestrateur (Acmechanic)
 # via le fichier de compteurs partage. Acmechanic l'affiche dans son bilan a
 # la place du vague « OK ».
@@ -397,6 +461,9 @@ statut_global_script() {
 		statut="INCHANGE"
 	fi
 	ecrire_compteur "SERVICE_$SERVICE_NAME" "$statut"
+	# Totaux d'etapes pour le bilan global (« Etapes : n reussies... »).
+	ajouter_compteur ETAPES_OK "$NB_OK"
+	ajouter_compteur ETAPES_ECHEC "$NB_ECHEC"
 }
 
 _enregistrer() {
@@ -497,10 +564,9 @@ ignorer_etape() {
 rapport_final() {
 	local titre_rapport="${1:-Bilan}"
 	local ligne libelle statut info couleur
-	echo
-	# RAPPORT_COMPACT=oui : le tableau des etapes est deja a l'ecran
-	# (affichage fixe de Acmechanic) ; on n'affiche que les totaux. Le detail
-	# complet reste ecrit dans le journal (plus bas).
+	[ "${RAPPORT_COMPACT:-}" = oui ] || echo
+	# RAPPORT_COMPACT=oui : affichage fixe d'Acmechanic, qui dessine son
+	# propre bilan (tableau_bilan) : rien a l'ecran, tout au journal.
 	if [ "${RAPPORT_COMPACT:-}" != oui ]; then
 		printf '%s%s%s\n' "$C_BOLD" "--- $titre_rapport ---" "$C_OFF"
 		printf '%-42s %-9s %s\n' "ETAPE" "STATUT" "DUREE"
@@ -516,20 +582,7 @@ rapport_final() {
 			printf '%-42s %s%-9s%s %s\n' "$libelle" "$couleur" "$statut" "$C_OFF" "$info"
 		done
 		printf '%s\n' "-------------------------------------------------------------------"
-	fi
-	if [ "${RAPPORT_COMPACT:-}" = oui ] && declare -p _ICONE_STATUT >/dev/null 2>&1; then
-		# Affichage fixe de Acmechanic : totaux en pastilles avec icones
-		# (lib/tableau.sh fournit icones et couleurs).
-		# Couleurs du theme du terminal, en video inverse (pastilles).
-		printf ' %s %s %d réussies %s  %s %s %d inchangées %s  %s %s %d ignorées %s  %s %s %d en échec %s\n' \
-			$'\033[1;7;32m' "${_ICONE_STATUT[OK]}" "$NB_OK" "$_T_RAZ" \
-			$'\033[7;36m' "${_ICONE_STATUT[INCHANGE]}" "$NB_INCHANGE" "$_T_RAZ" \
-			$'\033[7;33m' "${_ICONE_STATUT[IGNORE]}" "$NB_IGNORE" "$_T_RAZ" \
-			"$([ "$NB_ECHEC" -gt 0 ] && echo $'\033[1;7;91m' || echo $'\033[7;90m')" \
-			"${_ICONE_STATUT[ECHEC]}" "$NB_ECHEC" "$_T_RAZ"
-		printf ' %s%s Journal complet : %s%s\n' "$_T_TERNE" "${_ICONE_STATUT[DOSSIER]}" "$LOG_FILE" "$_T_RAZ"
-	else
-		printf 'Reussies : %s%d%s   Ignorees : %s%d%s   Inchangees : %s%d%s   En echec : %s%d%s\n' \
+		printf 'Etapes reussies : %s%d%s   Ignorees : %s%d%s   Inchangees : %s%d%s   En echec : %s%d%s\n' \
 			"$C_GREEN" "$NB_OK" "$C_OFF" \
 			"$C_YELLOW" "$NB_IGNORE" "$C_OFF" \
 			"$C_CYAN" "$NB_INCHANGE" "$C_OFF" \
@@ -1177,5 +1230,8 @@ bilan_service() {
 	if [ -z "${ACMECHANIC_VERSIONS_FICHIER:-}" ]; then
 		rapport_versions
 	fi
+	# Lance seul : ses points d'attention a la fin. Sous Acmechanic, ils
+	# sont regroupes dans le bilan global.
+	[ -z "${ACMECHANIC_ATTENTION_FICHIER:-}" ] && rapport_attention ""
 	rapport_final "$titre"
 }

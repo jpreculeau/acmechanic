@@ -40,8 +40,8 @@ if command -v rpi-eeprom-update >/dev/null 2>&1; then
 		enregistrer_version "eeprom" "${actuelle%% (*}" "${actuelle%% (*}"
 		;;
 	1)
-		warn "EEPROM : mise a jour disponible (${actuelle%% (*} -> ${derniere%% (*})."
-		warn "  A appliquer vous-meme : sudo rpi-eeprom-update -a && sudo reboot"
+		point_attention "EEPROM : mise a jour disponible (${actuelle%% (*} -> ${derniere%% (*})" \
+			"sudo rpi-eeprom-update -a && sudo reboot"
 		enregistrer_version "eeprom" "${actuelle%% (*}" "disponible : ${derniere%% (*}"
 		;;
 	*)
@@ -66,9 +66,9 @@ if command -v fwupdmgr >/dev/null 2>&1; then
 	code=$?
 	case "$code" in
 	0)
-		warn "fwupd : micrologiciel(s) a mettre a jour :"
 		grep -E '│|├|└|New version|Nouvelle version' <<<"$sortie" | head -20 | sed 's/^/    /'
-		warn "  A appliquer vous-meme : sudo fwupdmgr update"
+		point_attention "fwupd : micrologiciel(s) a mettre a jour (detail : fwupdmgr get-updates)" \
+			"sudo fwupdmgr update"
 		;;
 	2) inchanger_etape "fwupd" "aucune mise a jour" ;;
 	*)

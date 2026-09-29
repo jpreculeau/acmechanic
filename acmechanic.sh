@@ -250,6 +250,9 @@ log "Journal de cette execution : $LOG_FILE"
 # comptes deux fois.
 fichier_temp FICHIER_VERSIONS /tmp/acmechanic-versions-XXXXXX
 fichier_temp FICHIER_COMPTEURS /tmp/acmechanic-compteurs-XXXXXX
+# Points d'attention (point_attention) : ceux des services ET d'Acmechanic.
+fichier_temp FICHIER_ATTENTION /tmp/acmechanic-attention-XXXXXX
+ACMECHANIC_ATTENTION_FICHIER="$FICHIER_ATTENTION"
 # rapport_versions (lib/common.sh) lit ACMECHANIC_VERSIONS_FICHIER : variable
 # locale a Acmechanic, non exportee.
 ACMECHANIC_VERSIONS_FICHIER="$FICHIER_VERSIONS"
@@ -329,6 +332,12 @@ if [ "$faire_services" = true ]; then
 		LIGNES_TABLEAU+=("$nom")
 	done
 fi
+# Du plus rapide au plus lent (durees reelles du run precedent) ; le
+# systeme passe toujours en dernier : il attend la fin des services.
+FICHIER_DUREES="$LOG_DIR/durees"
+if [ ${#LIGNES_TABLEAU[@]} -gt 1 ]; then
+	mapfile -t LIGNES_TABLEAU < <(tableau_ordonner "$FICHIER_DUREES" "${LIGNES_TABLEAU[@]}")
+fi
 [ "$faire_systeme" = true ] && LIGNES_TABLEAU+=(systeme)
 
 TABLEAU=non
@@ -349,6 +358,7 @@ fi
 # toutes les 0,5 s : un service fini tot n'attend plus la fin des
 # lancements pour etre affiche termine (2026-09-27). Un service termine
 # n'existe plus (bash l'a deja recolte) : `wait <pid>` rend son code.
+NB_SVC_OK=0 NB_SVC_ECHEC=0 NB_SVC_TIMEOUT=0
 recolter_termines() {
 	local svc_pid svc_code nom svc_duree svc_statut
 	for svc_pid in "${!SVC_NOM[@]}"; do
@@ -366,6 +376,7 @@ recolter_termines() {
 		if [ "$svc_code" -eq 124 ] || [ "$svc_code" -eq 137 ]; then
 			err "$nom -- delai de ${DELAI_SERVICE}s depasse, etape abandonnee"
 			svc_statut="TIMEOUT"
+			NB_SVC_TIMEOUT=$((NB_SVC_TIMEOUT + 1))
 		else
 			svc_statut="$(grep "^SERVICE_$nom=" "$FICHIER_COMPTEURS" 2>/dev/null | cut -d= -f2 | head -1)"
 			if [ -z "$svc_statut" ]; then
@@ -400,8 +411,10 @@ recolter_termines() {
 		# separement, plus bas, depuis le fichier de compteurs).
 		if [ "$svc_code" -eq 0 ]; then
 			NB_OK=$((NB_OK + 1))
+			NB_SVC_OK=$((NB_SVC_OK + 1))
 		else
 			NB_ECHEC=$((NB_ECHEC + 1))
+			NB_SVC_ECHEC=$((NB_SVC_ECHEC + 1))
 		fi
 	done
 }
@@ -483,6 +496,7 @@ if [ "$faire_services" = true ]; then
 				RAPPORT_COMPACT="$([ "$TABLEAU" = oui ] && echo oui)" \
 				ACMECHANIC_VERSIONS_FICHIER="$FICHIER_VERSIONS" \
 				ACMECHANIC_COMPTEURS_FICHIER="$FICHIER_COMPTEURS" \
+				ACMECHANIC_ATTENTION_FICHIER="$FICHIER_ATTENTION" \
 				ACMECHANIC_PARALLELE=1 \
 				timeout "$DELAI_SERVICE" bash "$chemin" \
 				</dev/null >"$DOSSIER_SORTIES/$nom.sortie" 2>&1 9>&- &
@@ -557,10 +571,8 @@ if [ "$faire_systeme" = true ]; then
 
 	# Signale un redemarrage necessaire, sans jamais le declencher.
 	if [ -f /var/run/reboot-required ]; then
-		echo
-		warn "Un redemarrage est necessaire pour terminer les mises a jour."
-		[ -f /var/run/reboot-required.pkgs ] &&
-			warn "Paquets concernes : $(tr '\n' ' ' </var/run/reboot-required.pkgs)"
+		paquets="$(tr '\n' ' ' </var/run/reboot-required.pkgs 2>/dev/null)"
+		point_attention "$(t att_redemarrage "${paquets:-?}")" "sudo reboot"
 	fi
 	if [ "$NB_ECHEC" -gt "$echecs_avant_systeme" ]; then
 		statut_systeme=ECHEC
@@ -572,53 +584,16 @@ if [ "$faire_systeme" = true ]; then
 	echo "$statut_systeme|$((SECONDS - debut_systeme))s" >"$DOSSIER_ETAT/systeme.fin"
 fi
 
-# Fin de l'affichage fixe : dernier dessin, retour a l'ecran normal,
-# puis points d'attention et sorties des services en echec.
-if [ "$TABLEAU" = oui ]; then
-	tableau_arreter
-	exec 1>&5 2>&6 5>&- 6>&-
-	ACMECHANIC_ETAT_FICHIER=""
-	RAPPORT_COMPACT=oui
-	alertes="$(tableau_alertes)"
-	if [ -n "$alertes" ]; then
-		echo
-		printf ' %s%s %s%s\n' "$_T_GRAS$_T_JAUNE" "${_ICONE_STATUT[ATTENTION]}" "Points d'attention" "$_T_RAZ"
-		printf '%s\n' "$alertes"
-	fi
-	for nom in "${SERVICES_EN_ECHEC[@]}"; do
-		echo
-		warn "Fin de la sortie de $nom ($DOSSIER_SORTIES/$nom.sortie) :"
-		tail -n 20 "$DOSSIER_SORTIES/$nom.sortie" 2>/dev/null | sed 's/^/    /'
-	done
-	echo
-	printf ' %s%s Sorties détaillées : %s/%s\n' "$_T_TERNE" "${_ICONE_STATUT[DOSSIER]}" "$DOSSIER_SORTIES" "$_T_RAZ"
-fi
-
-# =====================================================================
-# Bilan
-# =====================================================================
-# Aggregation des compteurs des sous-scripts (INCHANGE / IGNORE) : ils
-# ont totalise leurs etapes dans ACMECHANIC_COMPTEURS_FICHIER, que Acmechanic seul
-# ne voyait pas (il ne lit que le code de retour de chaque script).
-if [ -f "${FICHIER_COMPTEURS:-}" ]; then
-	compte_inchange="$(grep '^INCHANGE=' "$FICHIER_COMPTEURS" 2>/dev/null | cut -d= -f2 | head -1)"
-	compte_ignore="$(grep '^IGNORE=' "$FICHIER_COMPTEURS" 2>/dev/null | cut -d= -f2 | head -1)"
-	NB_INCHANGE=$((NB_INCHANGE + ${compte_inchange:-0}))
-	NB_IGNORE=$((NB_IGNORE + ${compte_ignore:-0}))
-fi
-
-rapport_final "Bilan de la mise a jour globale"
-code=$?
-
 # ---------------------------------------------------------------------
 # auto_mise_a_jour : Acmechanic se met a jour lui-meme, EN FIN de run
 # (jamais pendant : les services en cours liraient un melange de deux
 # versions de lib/). Avance rapide seulement, arbre propre seulement ;
-# la nouvelle version sert au prochain lancement.
+# la nouvelle version sert au prochain lancement. Ce qui n'est pas
+# applique devient un point d'attention.
 # ACMECHANIC_AUTO_MAJ : oui (defaut) | signaler | non
 # ---------------------------------------------------------------------
 auto_mise_a_jour() {
-	local mode="${ACMECHANIC_AUTO_MAJ:-oui}" d="$ACMECHANIC_HOME" n avant
+	local mode="${ACMECHANIC_AUTO_MAJ:-oui}" d="$ACMECHANIC_HOME" n avant raison=""
 	[ "$mode" = non ] && return 0
 	git -C "$d" rev-parse -q --verify '@{u}' >/dev/null 2>&1 || return 0
 	if ! timeout 60 git -C "$d" fetch -q 2>/dev/null; then
@@ -629,21 +604,68 @@ auto_mise_a_jour() {
 	[ "$n" -eq 0 ] && return 0
 	avant="$(git -C "$d" rev-parse --short HEAD)"
 	if [ "$mode" != oui ]; then
-		warn "Acmechanic : $n commit(s) disponible(s) (ACMECHANIC_AUTO_MAJ=$mode) : git -C $d pull --ff-only"
+		raison="$(t raison_signaler)"
 	elif [ -n "$(git -C "$d" status --porcelain --untracked-files=no)" ]; then
-		warn "Acmechanic : $n commit(s) disponible(s), non appliques : modifications locales dans $d."
+		raison="$(t raison_modifs)"
 	elif git -C "$d" merge -q --ff-only '@{u}' 2>/dev/null; then
 		ok "Acmechanic mis a jour ($avant -> $(git -C "$d" rev-parse --short HEAD), $n commit(s)) : actif au prochain lancement."
+		enregistrer_version acmechanic "$avant" "$(git -C "$d" rev-parse --short HEAD)"
+		return 0
 	else
-		warn "Acmechanic : mise a jour disponible mais historique local divergent, non appliquee."
+		raison="$(t raison_divergent)"
 	fi
+	point_attention "$(t att_auto_maj "$n" "$raison")" "git -C $d pull --ff-only"
 }
 
-# Bloc récapitulatif des versions avant -> après.
+# Fin de l'affichage fixe : dernier dessin, retour a l'ecran normal.
 if [ "$TABLEAU" = oui ]; then
+	tableau_arreter
+	exec 1>&5 2>&6 5>&- 6>&-
+	ACMECHANIC_ETAT_FICHIER=""
+	RAPPORT_COMPACT=oui
+fi
+# Durees reelles de ce run : ordre des cadres au prochain lancement.
+TABLEAU_DOSSIER="$DOSSIER_ETAT" tableau_memoriser_durees "$FICHIER_DUREES"
+
+auto_mise_a_jour
+
+# =====================================================================
+# Bilan
+# =====================================================================
+# Totaux des sous-scripts (ils ecrivent dans le fichier de compteurs,
+# qu'Acmechanic seul ne voit pas : il ne lit que leur code de retour).
+compteur() { grep "^$1=" "$FICHIER_COMPTEURS" 2>/dev/null | cut -d= -f2 | head -1; }
+c_inch="$(compteur INCHANGE)" c_ign="$(compteur IGNORE)"
+c_ok="$(compteur ETAPES_OK)" c_ech="$(compteur ETAPES_ECHEC)"
+NB_INCHANGE=$((NB_INCHANGE + ${c_inch:-0}))
+NB_IGNORE=$((NB_IGNORE + ${c_ign:-0}))
+# Etapes de tous les services + etapes systeme d'Acmechanic lui-meme ;
+# un service coupe par son delai compte pour une etape en echec.
+ETAPES_OK=$((${c_ok:-0} + NB_OK - NB_SVC_OK))
+ETAPES_ECHEC=$((${c_ech:-0} + NB_ECHEC - NB_SVC_ECHEC + NB_SVC_TIMEOUT))
+
+rapport_final "Bilan de la mise a jour globale"
+code=$?
+
+if [ "$TABLEAU" = oui ]; then
+	# Points d'attention, erreurs, fin de sortie des services en echec.
+	rapport_attention "$FICHIER_ATTENTION"
+	erreurs="$(tableau_erreurs)"
+	if [ -n "$erreurs" ]; then
+		echo
+		printf ' %s%s %s%s\n' "$_T_GRAS$_T_ROUGE" "${_ICONE_STATUT[ERREUR]}" "${MSG[titre_erreurs]}" "$_T_RAZ"
+		printf '%s\n' "$erreurs"
+	fi
+	for nom in "${SERVICES_EN_ECHEC[@]}"; do
+		echo
+		warn "Fin de la sortie de $nom ($DOSSIER_SORTIES/$nom.sortie) :"
+		tail -n 20 "$DOSSIER_SORTIES/$nom.sortie" 2>/dev/null | tr -d '\037' | sed 's/^/    /'
+	done
+	tableau_bilan "$ETAPES_OK" "$NB_IGNORE" "$ETAPES_ECHEC"
+	printf ' %s%s %s%s\n' "$_T_TERNE" "${_ICONE_STATUT[DOSSIER]}" "$(t sorties "$DOSSIER_SORTIES/")" "$_T_RAZ"
+	printf ' %s%s %s%s\n' "$_T_TERNE" "${_ICONE_STATUT[DOSSIER]}" "$(t journal "$LOG_FILE")" "$_T_RAZ"
 	tableau_versions "$FICHIER_VERSIONS"
 	tableau_fin "$code"
-	auto_mise_a_jour
 	# Memes informations dans le journal que l'affichage classique.
 	{
 		printf '[%(%Y-%m-%d %H:%M:%S)T] %-7s %s\n' -1 INFO "Fin de Acmechanic : $code etape(s) en echec"
@@ -652,7 +674,7 @@ if [ "$TABLEAU" = oui ]; then
 	exit "$code"
 fi
 rapport_versions
-auto_mise_a_jour
+rapport_attention "$FICHIER_ATTENTION"
 
 echo
 if [ "$code" -eq 0 ]; then

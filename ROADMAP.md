@@ -7,6 +7,7 @@ Ce qui est prévu, par version. Les priorités peuvent bouger : les issues et PR
 - Bibliothèque élargie : Plex, Audiobookshelf, Vaultwarden, Uptime Kuma, Forgejo, Portainer, Open WebUI
 - Maintenance de la machine : `depots-git`, `outils-ia`, `micrologiciel` (signalement), `nettoyage`, `acmefrag`
 - Auto-mise à jour d'Acmechanic en fin de run (`ACMECHANIC_AUTO_MAJ`)
+- Affichage : cadres rangés par durée réelle, points d'attention, bilan par service, versions façon nala, français / anglais
 
 ## 🎯 1.5 — au-delà de Debian
 
@@ -31,4 +32,5 @@ Ce qui est prévu, par version. Les priorités peuvent bouger : les issues et PR
 - [ ] **Notifications** en fin de run : ntfy, Gotify, e-mail (uniquement si échec ou action à faire)
 - [ ] **Installation du minuteur** : `acmechanic --installer-minuteur` (timer systemd utilisateur, heure réglable)
 - [ ] **Registres hors Docker Hub** (ghcr.io, Codeberg, lscr.io) : digest distant sans pull, comme pour Docker Hub
-- [ ] Version anglaise des messages et de la documentation
+- [ ] Messages du journal et des services dans les catalogues de langue ; documentation en anglais
+- [ ] Autres langues (catalogues `locale/<code>.sh` : contributions bienvenues)

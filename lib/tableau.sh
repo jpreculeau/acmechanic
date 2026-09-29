@@ -21,6 +21,9 @@
 [ -n "${_TABLEAU_SH_LOADED:-}" ] && return 0
 _TABLEAU_SH_LOADED=1
 
+# shellcheck source=i18n.sh
+source "$(dirname "${BASH_SOURCE[0]}")/i18n.sh"
+
 TABLEAU_PID=""
 TABLEAU_DOSSIER=""
 TABLEAU_SORTIES="" # dossier des <ligne>.sortie (detail des services)
@@ -37,10 +40,15 @@ TABLEAU_DEBUT=""
 # deborde sur la cellule suivante. ACMECHANIC_ICONES=non : jeu Unicode simple.
 declare -A _ICONE_SERVICE _ICONE_STATUT
 if [ "${ACMECHANIC_ICONES:-oui}" = oui ]; then
+	# Services de la bibliotheque ; les votres : ICONES_SERVICES (local.conf).
 	_ICONE_SERVICE=(
-		[docker]=$'\xef\x88\x9e' [flatpak]=$'\xef\x86\xb3' [media]=$'\xef\x80\x88'
-		[sync]=$'\xef\x80\xa1' [agents]=$'\xef\x83\x90' [backup]=$'\xef\x86\x87'
-		[systeme]=$'\xef\x8c\x95' [defaut]=$'\xef\x80\x93'
+		[systeme]=$'\xef\x8c\x95' [defaut]=$'\xef\x80\x93' [docker]=$'\xef\x88\x9e'
+		[jellyfin]=$'\xef\x80\x88' [plex]=$'\xef\x80\x88' [audiobookshelf]=$'\xef\x80\xa5'
+		[arr]=$'\xef\x89\xac' [cross-seed]=$'\xef\x83\xac' [syncthing]=$'\xef\x80\xa1'
+		[vaultwarden]=$'\xef\x80\xa3' [uptime-kuma]=$'\xef\x88\x9e' [forgejo]=$'\xef\x84\xa6'
+		[portainer]=$'\xef\x82\xae' [beszel]=$'\xef\x82\x80' [open-webui]=$'\xef\x83\xa6'
+		[depots-git]=$'\xef\x87\x93' [outils-ia]=$'\xef\x83\x90' [micrologiciel]=$'\xef\x8b\x9b'
+		[nettoyage]=$'\xef\x87\xb8' [acmefrag]=$'\xef\x82\xa0' [flatpak]=$'\xef\x86\xb3'
 	)
 	_ICONE_STATUT=(
 		[OK]=$'\xef\x81\x98' [INCHANGE]=$'\xef\x81\x98' [MAJ]=$'\xef\x82\xaa'
@@ -60,6 +68,13 @@ else
 	)
 fi
 
+# Icones ajoutees par l'utilisateur (local.conf) :
+#   declare -A ICONES_SERVICES=([mon-app]=$'\xef\x80\x95')
+if declare -p ICONES_SERVICES >/dev/null 2>&1; then
+	for _k in "${!ICONES_SERVICES[@]}"; do _ICONE_SERVICE[$_k]="${ICONES_SERVICES[$_k]}"; done
+	unset _k
+fi
+
 # Couleurs du THEME du terminal (2026-09-28) : uniquement les 16 couleurs
 # ANSI (30-37, 90-97) et la video inverse. Elles suivent le theme choisi
 # dans kitty / LXTerminal, au lieu de teintes 256 couleurs figees.
@@ -74,7 +89,8 @@ _T_ARC=($'\033[95m' $'\033[96m' $'\033[93m' $'\033[92m' $'\033[94m' $'\033[91m'
 
 # Onomatopees de dessin anime, pour le seul plaisir des yeux : le bas de
 # chaque cadre en affiche une selon l'etat du service.
-_T_ONOMATOPEES=("Zip !" "Zoom !" "Vroum !" "Bip bip !" "Hop hop !" "Boing !" "Wiizz !" "Tagada !")
+# Textes : catalogue de la langue (lib/i18n.sh, locale/).
+IFS='|' read -r -a _T_ONOMATOPEES <<<"${MSG[bruit_travail]}"
 
 # _tableau_style <statut> [indice] : fixe _COUL (cadre et titre),
 # _LIBELLE, _ICONE et _BRUIT (onomatopee du bas de cadre).
@@ -82,15 +98,15 @@ _tableau_style() {
 	local i="${2:-0}"
 	case "$1" in
 	"EN COURS")
-		_COUL="${_T_ARC[$((i % ${#_T_ARC[@]}))]}" _LIBELLE="au travail" _ICONE="$_SPIN"
+		_COUL="${_T_ARC[$((i % ${#_T_ARC[@]}))]}" _LIBELLE="${MSG[statut_travail]}" _ICONE="$_SPIN"
 		_BRUIT="${_T_ONOMATOPEES[$(((EPOCHSECONDS / 2 + i) % ${#_T_ONOMATOPEES[@]}))]}" ;;
-	MAJ) _COUL="$_T_VERT" _LIBELLE="mis à jour" _ICONE="${_ICONE_STATUT[MAJ]}" _BRUIT="Tadaa !" ;;
-	OK) _COUL=$'\033[32m' _LIBELLE="ok" _ICONE="${_ICONE_STATUT[OK]}" _BRUIT="Nickel !" ;;
-	INCHANGE) _COUL=$'\033[32m' _LIBELLE="inchangé" _ICONE="${_ICONE_STATUT[INCHANGE]}" _BRUIT="Nickel !" ;;
-	IGNORE) _COUL="$_T_JAUNE" _LIBELLE="ignoré" _ICONE="${_ICONE_STATUT[IGNORE]}" _BRUIT="Pouf !" ;;
-	"EN ATTENTE") _COUL="$_T_TERNE" _LIBELLE="en attente" _ICONE="${_ICONE_STATUT[ATTENTE]}" _BRUIT="Au suivant…" ;;
-	TIMEOUT) _COUL="$_T_ROUGE" _LIBELLE="trop long" _ICONE="${_ICONE_STATUT[TIMEOUT]}" _BRUIT="Zzzz…" ;;
-	*) _COUL="$_T_ROUGE" _LIBELLE="échec" _ICONE="${_ICONE_STATUT[ECHEC]}" _BRUIT="Patatras !" ;;
+	MAJ) _COUL="$_T_VERT" _LIBELLE="${MSG[statut_maj]}" _ICONE="${_ICONE_STATUT[MAJ]}" _BRUIT="${MSG[bruit_maj]}" ;;
+	OK) _COUL=$'\033[32m' _LIBELLE="${MSG[statut_ok]}" _ICONE="${_ICONE_STATUT[OK]}" _BRUIT="${MSG[bruit_ok]}" ;;
+	INCHANGE) _COUL=$'\033[32m' _LIBELLE="${MSG[statut_inchange]}" _ICONE="${_ICONE_STATUT[INCHANGE]}" _BRUIT="${MSG[bruit_ok]}" ;;
+	IGNORE) _COUL="$_T_JAUNE" _LIBELLE="${MSG[statut_ignore]}" _ICONE="${_ICONE_STATUT[IGNORE]}" _BRUIT="${MSG[bruit_ignore]}" ;;
+	"EN ATTENTE") _COUL="$_T_TERNE" _LIBELLE="${MSG[statut_attente]}" _ICONE="${_ICONE_STATUT[ATTENTE]}" _BRUIT="${MSG[bruit_attente]}" ;;
+	TIMEOUT) _COUL="$_T_ROUGE" _LIBELLE="${MSG[statut_timeout]}" _ICONE="${_ICONE_STATUT[TIMEOUT]}" _BRUIT="${MSG[bruit_timeout]}" ;;
+	*) _COUL="$_T_ROUGE" _LIBELLE="${MSG[statut_echec]}" _ICONE="${_ICONE_STATUT[ECHEC]}" _BRUIT="${MSG[bruit_echec]}" ;;
 	esac
 }
 
@@ -191,7 +207,7 @@ _tableau_details() {
 		# script (deja visible dans le tableau).
 		[ -n "${ligne//[[:space:]=─-]/}" ] || continue
 		case "${ligne#"${ligne%%[![:space:]]*}"}" in
-		"Reussies :"* | "Journal complet :"* | "--- Bilan"* | ETAPE* | "SERVICE "* | "MAINTENANCE "*) continue ;;
+		"Etapes reussies :"* | "Journal complet :"* | "--- Bilan"* | "ETAPE "* | "SERVICE "* | "MAINTENANCE "*) continue ;;
 		esac
 		_DETAILS=("$ligne" "${_DETAILS[@]}")
 	done
@@ -230,6 +246,37 @@ tableau_possible() {
 	[ $((3 + _NRANG * 3)) -le "${h:-0}" ] && [ "$_LARG" -ge 40 ]
 }
 
+# _tableau_ligne_detail <ligne> <statut> <largeur> -> _LD (ligne coloree)
+# et _LD_LARG (sa largeur visible). Les lignes de journal portent leur
+# niveau entre deux \x1f (voir _log_raw) : meme couleur et meme icone
+# qu'a l'ecran, dans les couleurs du theme. La sortie des commandes
+# (docker, nala...) garde la couleur par defaut ; une erreur ressort en rouge.
+_tableau_ligne_detail() {
+	local det="$1" statut="$2" w="$3" niveau="" icone="" coul=""
+	if [[ "$det" == $'\x1f'*$'\x1f'* ]]; then
+		niveau="${det#$'\x1f'}" niveau="${niveau%%$'\x1f'*}"
+		det="${det#$'\x1f'*$'\x1f'}"
+	fi
+	case "$niveau" in
+	OK) icone="${_ICONE_STATUT[OK]}" coul="$_T_VERT" ;;
+	ATTENTION) icone="${_ICONE_STATUT[ATTENTION]}" coul="$_T_JAUNE" ;;
+	ERREUR) icone="${_ICONE_STATUT[ERREUR]}" coul="$_T_ROUGE" ;;
+	ETAPE) icone="${_ICONE_STATUT[FLECHE]}" coul="$_T_BLEU" ;;
+	INFO) icone="·" coul="" ;;
+	*)
+		if [ "$statut" = "EN ATTENTE" ]; then
+			coul="$_T_ITAL$_T_TERNE"
+		elif [[ "${det,,}" =~ (^|[^a-z])(error|erreur|failed|fatal)([^a-z]|$) ]]; then
+			coul="$_T_ROUGE"
+		fi
+		;;
+	esac
+	[ -n "$icone" ] && det="$icone $det"
+	det="${det:0:$w}"
+	_LD_LARG=${#det}
+	_LD="${coul}${det}${_T_RAZ}"
+}
+
 # _tableau_cadre <nom> <indice> : construit le cadre d'un service dans
 # le tableau _CADRE_L (K + 2 lignes, toutes exactement de _LARG colonnes).
 _tableau_cadre() {
@@ -261,24 +308,15 @@ _tableau_cadre() {
 	# Contenu : K lignes, toujours. En attente : une invitation ; sinon
 	# les dernieres lignes de la sortie du service (gardees une fois fini).
 	if [ "$statut" = "EN ATTENTE" ]; then
-		_DETAILS=("…patiente dans les coulisses")
+		_DETAILS=("${MSG[coulisses]}")
 	else
 		_tableau_details "$TABLEAU_SORTIES/$nom.sortie" "$_K"
 	fi
 	for ((i = 0; i < _K; i++)); do
 		det="${_DETAILS[i]:-}"
-		det="${det:0:$((w - 4))}"
-		printf -v remplir '%*s' $((w - 4 - ${#det})) ''
-		if [ "$statut" = "EN ATTENTE" ]; then
-			ligne="${_T_ITAL}${_T_TERNE}${det}${_T_RAZ}"
-		elif [[ "$det" =~ ^([0-9]{2}:[0-9]{2}:[0-9]{2})\ (.*)$ ]]; then
-			ligne="${_T_TERNE}${BASH_REMATCH[1]}${_T_RAZ} ${BASH_REMATCH[2]}"
-		elif [[ "${det,,}" =~ (^|[^a-z])(error|erreur|failed|fatal)([^a-z]|$) ]]; then
-			ligne="${_T_ROUGE}${det}${_T_RAZ}"
-		else
-			ligne="${_T_TERNE}${det}${_T_RAZ}"
-		fi
-		_CADRE_L+=("${c}│${_T_RAZ} ${ligne}${remplir} ${c}│${_T_RAZ}")
+		_tableau_ligne_detail "$det" "$statut" $((w - 4))
+		printf -v remplir '%*s' $((w - 4 - _LD_LARG)) ''
+		_CADRE_L+=("${c}│${_T_RAZ} ${_LD}${remplir} ${c}│${_T_RAZ}")
 	done
 
 	# Bordure basse avec l'onomatopee : ╰──────── Zoom ! ─╯
@@ -342,7 +380,7 @@ _tableau_dessiner() {
 	ligne=" ${_T_GRAS}${_T_INV}${_T_MAGENTA} ${_ICONE_STATUT[TITRE]} ACMECHANIC ${_T_RAZ}"
 	# Etoiles : icone Font Awesome (U+F005) ; « ★ » Unicode n'existe pas
 	# dans JetBrainsMono Nerd Font (carre vide a l'ecran).
-	[ "$cols" -ge 120 ] && ligne+=" ${_T_ITAL}${_T_JAUNE}${_ICONE_STATUT[ETOILE]} le grand show de la maintenance ${_ICONE_STATUT[ETOILE]}${_T_RAZ}"
+	[ "$cols" -ge 120 ] && ligne+=" ${_T_ITAL}${_T_JAUNE}${_ICONE_STATUT[ETOILE]} ${MSG[sous_titre]} ${_ICONE_STATUT[ETOILE]}${_T_RAZ}"
 	ligne+="  ${_T_CYAN}${_ICONE_STATUT[MACHINE]} ${HOSTNAME:-}${_T_RAZ}"
 	ligne+="  ${barre} ${_T_GRAS}${finis}/${n}${_T_RAZ}"
 	[ "$maj" -gt 0 ] && ligne+="  ${_T_VERT}${_ICONE_STATUT[MAJ]} ${maj}${_T_RAZ}"
@@ -372,46 +410,141 @@ _tableau_dessiner() {
 	echo "$hauteur" >"$d/.dessine"
 }
 
-# tableau_alertes : liste les ATTENTION / ERREUR collectees pendant le
-# run, service par service. Les etapes ignorees volontairement (deja
-# comptees dans le bilan) ne sont pas repetees.
-tableau_alertes() {
-	local f nom niveau texte icone coul
+# tableau_erreurs : les ERREUR collectees pendant le run, service par
+# service (les actions a faire par l'utilisateur sont des points
+# d'attention : point_attention, lib/common.sh).
+tableau_erreurs() {
+	local f nom niveau texte
 	for f in "$TABLEAU_DOSSIER"/*.alertes; do
 		[ -s "$f" ] || continue
 		nom="$(basename "$f" .alertes)"
 		while read -r niveau texte; do
-			case "$texte" in *" -- ignore : "*) continue ;; esac
-			if [ "$niveau" = ERREUR ]; then
-				icone="${_ICONE_STATUT[ERREUR]}" coul="$_T_ROUGE"
-			else
-				icone="${_ICONE_STATUT[ATTENTION]}" coul="$_T_JAUNE"
-			fi
-			printf '  %s%s%s %s%-10s%s %s\n' "$coul" "$icone" "$_T_RAZ" \
+			[ "$niveau" = ERREUR ] || continue
+			printf '  %s%s%s %s%-14s%s %s\n' "$_T_ROUGE" "${_ICONE_STATUT[ERREUR]}" "$_T_RAZ" \
 				"$_T_GRAS" "$nom" "$_T_RAZ" "$texte"
 		done <"$f"
 	done
 }
 
-# tableau_versions <fichier_versions> : bloc « Versions » du bilan, en
-# style tableau (icone, service, version ; en vert ce qui a change).
+# --- Ordre des cadres : du plus rapide au plus lent ---
+# Les durees reelles de chaque service sont memorisees a la fin d'un run
+# (tableau_memoriser_durees) ; au run suivant, les cadres sont ranges du
+# plus rapide (en haut a gauche) au plus lent (en bas a droite), en ordre
+# de lecture. Un service jamais mesure passe apres les autres. L'ordre est
+# fige pour tout le run : les cadres ne bougent pas pendant l'affichage.
+
+# tableau_ordonner <fichier_durees> <nom>... : noms tries (un par ligne).
+tableau_ordonner() {
+	local f="$1" nom d
+	shift
+	local -A duree=()
+	if [ -r "$f" ]; then
+		while read -r nom d; do [[ "$d" =~ ^[0-9]+$ ]] && duree[$nom]=$d; done <"$f"
+	fi
+	for nom in "$@"; do
+		printf '%s %s\n' "${duree[$nom]:-999999}" "$nom"
+	done | sort -s -n -k1,1 | cut -d' ' -f2
+}
+
+# tableau_memoriser_durees <fichier_durees> : durees reelles de ce run
+# (fichiers .fin), fusionnees avec celles des services non lances.
+tableau_memoriser_durees() {
+	local f="$1" fin nom statut duree
+	local -A duree_de=()
+	if [ -r "$f" ]; then
+		while read -r nom duree; do [ -n "$nom" ] && duree_de[$nom]="$duree"; done <"$f"
+	fi
+	for fin in "$TABLEAU_DOSSIER"/*.fin; do
+		[ -f "$fin" ] || continue
+		nom="$(basename "$fin" .fin)"
+		IFS='|' read -r statut duree <"$fin"
+		duree="${duree%s}"
+		[[ "$duree" =~ ^[0-9]+$ ]] && duree_de[$nom]="$duree"
+	done
+	for nom in "${!duree_de[@]}"; do printf '%s %s\n' "$nom" "${duree_de[$nom]}"; done |
+		sort >"$f.tmp" && mv "$f.tmp" "$f"
+}
+
+# tableau_bilan <etapes_ok> <etapes_ignorees> <etapes_echec> : bilan
+# lisible. D'abord les SERVICES (un par cadre) selon leur statut final,
+# puis le total des etapes de tous les services.
+tableau_bilan() {
+	local nom statut maj=0 inch=0 ok=0 ign=0 ech=0 txt
+	local -a _SFX=(n 1) # suffixe de cle : _1 au singulier, _n sinon
+	for nom in "${TABLEAU_LIGNES[@]}"; do
+		statut=""
+		[ -f "$TABLEAU_DOSSIER/$nom.fin" ] && IFS='|' read -r statut _ <"$TABLEAU_DOSSIER/$nom.fin"
+		case "$statut" in
+		MAJ) maj=$((maj + 1)) ;;
+		INCHANGE) inch=$((inch + 1)) ;;
+		OK) ok=$((ok + 1)) ;;
+		IGNORE) ign=$((ign + 1)) ;;
+		*) ech=$((ech + 1)) ;;
+		esac
+	done
+	printf '\n %s%s%s ' "$_T_GRAS" "${MSG[titre_services]}" "$_T_RAZ"
+	_pastille() { printf ' %s %s %s %s ' "$1" "$2" "$3" "$_T_RAZ"; }
+	tv txt bilan_maj "$maj"
+	_pastille $'\033[1;7;32m' "${_ICONE_STATUT[MAJ]}" "$txt"
+	tv txt "bilan_inchange_${_SFX[inch == 1]}" "$inch"
+	_pastille $'\033[7;36m' "${_ICONE_STATUT[INCHANGE]}" "$txt"
+	if [ "$ok" -gt 0 ]; then
+		tv txt "bilan_ok_${_SFX[ok == 1]}" "$ok"
+		_pastille $'\033[7;32m' "${_ICONE_STATUT[OK]}" "$txt"
+	fi
+	if [ "$ign" -gt 0 ]; then
+		tv txt "bilan_ignore_${_SFX[ign == 1]}" "$ign"
+		_pastille $'\033[7;33m' "${_ICONE_STATUT[IGNORE]}" "$txt"
+	fi
+	tv txt bilan_echec "$ech"
+	_pastille "$([ "$ech" -gt 0 ] && echo $'\033[1;7;91m' || echo $'\033[7;90m')" "${_ICONE_STATUT[ECHEC]}" "$txt"
+	echo
+	tv txt bilan_etapes "${1:-0}" "${2:-0}" "${3:-0}"
+	printf ' %s%s%s\n' "$_T_TERNE" "$txt" "$_T_RAZ"
+}
+
+# _version_diff <avant> <apres> : decoupe deux versions en partie
+# commune (_VC) et parties qui different (_VA, _VB), facon nala. La coupe
+# se fait au debut du « mot » ou commence la difference (chiffres et
+# lettres), en y incluant un « + » ou « ~ » de metadonnees de version :
+#   v0.21.5+3851.g4569bb8 / v0.21.5+4533.g39faafb  ->  commun « v0.21.5 »
+#   (build 2026-09-21) / (build 2026-09-28)        ->  differe « 21) » / « 28) »
+_version_diff() {
+	local a="$1" b="$2" p=0 n
+	n=${#a}
+	[ ${#b} -lt "$n" ] && n=${#b}
+	while [ "$p" -lt "$n" ] && [ "${a:p:1}" = "${b:p:1}" ]; do p=$((p + 1)); done
+	while [ "$p" -gt 0 ] && [[ "${a:p-1:1}" =~ [[:alnum:]] ]]; do p=$((p - 1)); done
+	[ "$p" -gt 0 ] && [[ "${a:p-1:1}" == [+~] ]] && p=$((p - 1))
+	_VC="${a:0:p}" _VA="${a:p}" _VB="${b:p}"
+}
+
+# tableau_versions <fichier_versions> : bloc « Versions » du bilan. Une
+# version inchangee s'affiche une fois ; sinon avant -> apres, avec la
+# seule partie qui change en couleur (rouge avant, vert apres). Trop
+# long pour une ligne : la nouvelle version passe a la ligne.
 tableau_versions() {
 	local f="$1" service avant apres cols
 	[ -s "$f" ] || return 0
 	read -r _ cols < <(stty size </dev/tty 2>/dev/null)
 	cols="${cols:-100}"
-	printf "\n %s%s Versions%s\n" "$_T_GRAS$_T_BLEU" "${_ICONE_STATUT[VERSIONS]}" "$_T_RAZ"
+	printf "\n %s%s %s%s\n" "$_T_GRAS$_T_BLEU" "${_ICONE_STATUT[VERSIONS]}" "${MSG[titre_versions]}" "$_T_RAZ"
 	while IFS="|" read -r service avant apres; do
 		[ -n "$service" ] || continue
 		_tableau_cadrer "$service" 14
 		if [ "$avant" = "$apres" ]; then
 			printf "  %s%s%s %s %s%s%s\n" "$_T_CYAN" "${_ICONE_STATUT[INCHANGE]}" "$_T_RAZ" \
 				"$_CADRE" "$_T_TERNE" "${avant:0:$((cols - 22))}" "$_T_RAZ"
-		else
-			printf "  %s%s%s %s%s%s %s%s%s %s%s%s\n" "$_T_VERT" "${_ICONE_STATUT[MAJ]}" "$_T_RAZ" \
-				"$_T_GRAS" "$_CADRE" "$_T_RAZ" "$_T_TERNE" "$avant" "$_T_RAZ" \
-				"$_T_VERT${_ICONE_STATUT[FLECHE]} " "$apres" "$_T_RAZ"
+			continue
 		fi
+		_version_diff "$avant" "$apres"
+		printf "  %s%s%s %s%s%s %s%s%s%s%s" "$_T_VERT" "${_ICONE_STATUT[MAJ]}" "$_T_RAZ" \
+			"$_T_GRAS" "$_CADRE" "$_T_RAZ" "$_T_TERNE" "$_VC" "$_T_ROUGE" "$_VA" "$_T_RAZ"
+		if [ $((22 + ${#avant} + 3 + ${#apres})) -gt "$cols" ]; then
+			printf "\n  %18s" ""
+		fi
+		printf " %s%s %s%s%s%s%s\n" "$_T_VERT" "${_ICONE_STATUT[FLECHE]}" "$_T_TERNE" "$_VC" \
+			"$_T_GRAS$_T_VERT" "$_VB" "$_T_RAZ"
 	done <"$f"
 }
 
@@ -425,13 +558,14 @@ tableau_fin() {
 		# Fermeture « a l'iris » facon dessin anime : anneaux colores
 		# autour du message de fin.
 		for i in 0 1 2; do anneaux+="${_T_ARC[i]}("; done
-		printf ' %s %s%s Rideau ! Tout est en ordre. %s' "$anneaux" "$_T_GRAS$_T_VERT" "${_ICONE_STATUT[OK]}" "$_T_RAZ"
+		printf ' %s %s%s %s %s' "$anneaux" "$_T_GRAS$_T_VERT" "${_ICONE_STATUT[OK]}" "${MSG[fin_ok]}" "$_T_RAZ"
 		for i in 2 1 0; do printf '%s)' "${_T_ARC[i]}"; done
 		printf '%s\n' "$_T_RAZ"
 	else
-		printf ' %s%s Patatras ! %s étape(s) en échec.%s  %s(restauration : %s/restore.sh)%s\n' \
-			"$_T_GRAS$_T_ROUGE" "${_ICONE_STATUT[ECHEC]}" "$code" "$_T_RAZ" "$_T_TERNE" "$ACMECHANIC_HOME" "$_T_RAZ"
+		printf ' %s%s %s%s  %s(%s)%s\n' "$_T_GRAS$_T_ROUGE" "${_ICONE_STATUT[ECHEC]}" \
+			"$(t fin_echec "$code")" "$_T_RAZ" "$_T_TERNE" "$(t restauration "$ACMECHANIC_HOME/restore.sh")" "$_T_RAZ"
 	fi
-	printf ' %s%s %s libres (%s utilisés)   %s %s de sauvegardes%s\n' "$_T_TERNE" \
-		"${_ICONE_STATUT[DISQUE]}" "$libre" "$usage" "${_ICONE_STATUT[SAUVEGARDE]}" "$taille" "$_T_RAZ"
+	printf ' %s%s %s   %s %s%s\n' "$_T_TERNE" \
+		"${_ICONE_STATUT[DISQUE]}" "$(t disque "$libre" "$usage")" \
+		"${_ICONE_STATUT[SAUVEGARDE]}" "$(t sauvegardes "$taille")" "$_T_RAZ"
 }

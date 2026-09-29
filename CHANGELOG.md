@@ -11,6 +11,15 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 - Auto-mise à jour d'Acmechanic en fin de run (`ACMECHANIC_AUTO_MAJ=oui|signaler|non`).
 - `etape` (lib/service.sh) : comme `run_etape`, mais renvoie 1 en cas d'échec.
 - `ROADMAP.md` : 1.5 multi-distributions (dnf, pacman, zypper, apk).
+- Langues : catalogues `locale/fr.sh` et `locale/en.sh`, `ACMECHANIC_LANGUE`, autres langues par simple catalogue (test de complétude).
+- Points d'attention : `point_attention "message" "commande"` pour tout service, regroupés en fin de passage (redémarrage requis, micrologiciel, auto-mise à jour non appliquée…).
+- Cadres rangés du plus rapide au plus lent selon les durées réelles du passage précédent (`~/logs/acmechanic/durees`).
+
+### Modifié
+- Cadres : lignes colorées et iconées selon leur niveau, comme à l'écran, sans horodatage ; l'écran en mode ligne à ligne perd aussi l'horodatage (gardé au journal).
+- Bilan : services par statut (mis à jour, inchangés, en échec…) puis total des étapes, au lieu d'un « réussies » ambigu.
+- Versions : seule la partie qui change est colorée (façon nala) ; une version trop longue passe à la ligne.
+- Icônes de cadre pour tous les services de la bibliothèque ; `ICONES_SERVICES` (local.conf) pour les vôtres.
 
 ## [1.0.0] - 2026-09-28
 

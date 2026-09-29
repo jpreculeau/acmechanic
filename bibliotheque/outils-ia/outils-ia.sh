@@ -118,7 +118,8 @@ if present hermes; then
 	if ! timeout 120 hermes update --check 2>&1 | grep -qiE 'update available|behind'; then
 		inchanger_etape "Hermes" "deja a jour"
 	elif [ -n "${HERMES_SESSION_ID:-}${HERMES_AGENT:-}" ]; then
-		ignorer_etape "Hermes : mise a jour" "lance depuis Hermes : la session serait coupee (hermes update)"
+		ignorer_etape "Hermes : mise a jour" "lance depuis Hermes : la session serait coupee"
+		point_attention "Hermes : mise a jour disponible, non appliquee depuis une session Hermes" "hermes update"
 	else
 		maj_commande hermes hermes --version -- hermes update --yes
 	fi
@@ -135,8 +136,8 @@ if present ollama; then
 	elif [ "$locale" = "$derniere" ]; then
 		inchanger_etape "Ollama" "a jour ($locale)"
 	else
-		warn "Ollama : $locale installee, $derniere publiee."
-		warn "  A appliquer vous-meme : curl -fsSL https://ollama.com/install.sh | sh"
+		point_attention "Ollama : $locale installee, $derniere publiee" \
+			"curl -fsSL https://ollama.com/install.sh | sh"
 	fi
 	enregistrer_version "ollama" "${locale:-?}" "${locale:-?}"
 	if [ "$OLLAMA_MODELES_MAJ" = oui ]; then

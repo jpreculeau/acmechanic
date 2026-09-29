@@ -64,3 +64,6 @@ if [[ -z "${FLATPAK_SAUVEGARDES+x}" ]]; then FLATPAK_SAUVEGARDES=(); fi
 if ! declare -F config_service >/dev/null; then
 	config_service() { echo ""; }
 fi
+
+# Langue : ACMECHANIC_LANGUE a pu etre fixee dans local.conf (lib/i18n.sh).
+declare -F i18n_charger >/dev/null && i18n_charger

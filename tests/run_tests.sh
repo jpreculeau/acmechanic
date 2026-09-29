@@ -111,7 +111,7 @@ chmod +x "$B/rpi-eeprom-update"
 PATH="$B:$PATH" "$ROOT/bibliotheque/micrologiciel/micrologiciel.sh" >/dev/null 2>&1; rc=$?
 out="$(cat "$LOG_DIR/micrologiciel.log")"
 check "micrologiciel : EEPROM signalee sans echec" eq "$rc" "0"
-check "micrologiciel : commande a lancer indiquee" grep -q 'rpi-eeprom-update -a' <<<"$out"
+check "micrologiciel : point d'attention avec la commande" grep -q 'rpi-eeprom-update -a' <<<"$out"
 L="$TMP/lg"; mkdir -p "$L/foo" "$L/nettoyage"
 head -c 3145728 /dev/zero >"$L/foo/foo.log"; head -c 3145728 /dev/zero >"$L/foo/autre.log"
 LOG_DIR="$L/nettoyage" NETTOYAGE_DOCKER=non NETTOYAGE_JOURNAL=non NETTOYAGE_PAQUETS=non \
@@ -148,6 +148,43 @@ _tableau_duree 125
 check "duree 125 s" eq "$_DUREE" "2m05s"
 _tableau_duree 42s
 check "duree 42 s" eq "$_DUREE" "42s"
+
+_version_diff "Hermes Agent v0.21.5+3851.g4569bb8 (2026.9.24)" "Hermes Agent v0.21.5+4533.g39faafb (2026.9.24)"
+check "versions : partie commune (facon nala)" eq "$_VC" "Hermes Agent v0.21.5"
+check "versions : partie qui change, avant" eq "$_VA" "+3851.g4569bb8 (2026.9.24)"
+check "versions : partie qui change, apres" eq "$_VB" "+4533.g39faafb (2026.9.24)"
+_version_diff "img:unstable (build 2026-09-21)" "img:unstable (build 2026-09-28)"
+check "versions : date de build" eq "$_VA/$_VB" "21)/28)"
+_version_diff "5.2.3" "5.2.10"
+check "versions : dernier nombre seulement" eq "$_VC|$_VA|$_VB" "5.2.|3|10"
+printf 'lent 300\nrapide 5\nmoyen 40\n' >"$TMP/durees"
+check "ordre des cadres : du plus rapide au plus lent, inconnus a la fin" \
+	eq "$(tableau_ordonner "$TMP/durees" lent inconnu rapide moyen | tr '\n' ' ')" "rapide moyen lent inconnu "
+mkdir -p "$TMP/etat"; echo "MAJ|12s" >"$TMP/etat/lent.fin"; echo "IGNORE|-" >"$TMP/etat/moyen.fin"
+TABLEAU_DOSSIER="$TMP/etat" tableau_memoriser_durees "$TMP/durees"
+check "durees memorisees (mesuree, gardee, ignoree)" eq "$(tr '\n' ' ' <"$TMP/durees")" "lent 12 moyen 40 rapide 5 "
+
+echo "langues (lib/i18n.sh, locale/)"
+cles() { bash -c 'declare -A MSG=(); source "$1"; printf "%s\n" "${!MSG[@]}" | sort' _ "$1"; }
+for c in "$ROOT"/locale/*.sh; do
+	[ "$(basename "$c")" = fr.sh ] && continue
+	check "locale/$(basename "$c") : memes cles que fr.sh" eq "$(cles "$c" | tr '\n' ' ')" "$(cles "$ROOT/locale/fr.sh" | tr '\n' ' ')"
+done
+check "anglais par defaut sous LANG=C" eq "$(env -u ACMECHANIC_LANGUE LC_ALL=C bash -c 'source "$1/lib/i18n.sh"; t fin_ok' _ "$ROOT")" "Curtain! Everything's shipshape."
+check "ACMECHANIC_LANGUE=fr" eq "$(ACMECHANIC_LANGUE=fr bash -c 'source "$1/lib/i18n.sh"; t fin_echec 2' _ "$ROOT")" "Patatras ! 2 étape(s) en échec."
+check "langue sans catalogue : anglais" eq "$(ACMECHANIC_LANGUE=de bash -c 'source "$1/lib/i18n.sh"; echo "$I18N_LANGUE"' _ "$ROOT")" "en"
+
+echo "points d'attention"
+out="$(bash -c '
+	SERVICE_NAME=att; source "$ACMECHANIC_HOME/lib/common.sh"
+	export ACMECHANIC_ATTENTION_FICHIER="'"$TMP"'/att"
+	point_attention "EEPROM a mettre a jour" "sudo rpi-eeprom-update -a"
+	cat "$ACMECHANIC_ATTENTION_FICHIER"
+' 2>/dev/null | tail -1)"
+check "point_attention : fichier partage (service|message|commande)" eq "$out" "att|EEPROM a mettre a jour|sudo rpi-eeprom-update -a"
+out="$(bash -c 'SERVICE_NAME=att; source "$ACMECHANIC_HOME/lib/common.sh"; point_attention "A faire" "cmd x" >/dev/null; rapport_attention ""' 2>/dev/null)"
+check "rapport_attention : message et commande" grep -q 'A faire' <<<"$out"
+check "rapport_attention : commande a lancer" grep -q 'cmd x' <<<"$out"
 
 echo "sauvegardes (lib/backup.sh)"
 out="$(bash -c '
