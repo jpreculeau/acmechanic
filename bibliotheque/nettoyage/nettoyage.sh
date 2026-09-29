@@ -102,7 +102,6 @@ LIBRE_APRES="$(libre_ko "$HOME" /)"
 GAIN_MO=$(((LIBRE_APRES - LIBRE_AVANT) / 1024))
 [ "$GAIN_MO" -lt 0 ] && GAIN_MO=0
 ok "Espace recupere : ~${GAIN_MO} Mo"
-enregistrer_version "nettoyage" "-" "${GAIN_MO} Mo liberes"
 
 bilan_service "Bilan du nettoyage"
 exit $?

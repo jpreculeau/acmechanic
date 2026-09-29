@@ -274,7 +274,9 @@ titre() {
 # de retenir le verrou apres la fin du script.
 prendre_verrou() {
 	local nom="${1:-$SERVICE_NAME}"
-	local fichier="/tmp/maintenance-$nom.lock"
+	# VERROU_DIR : dossier des verrous (les tests en utilisent un a part,
+	# pour ne jamais gener une maintenance reelle en cours).
+	local fichier="${VERROU_DIR:-/tmp}/maintenance-$nom.lock"
 	exec 9>"$fichier" || return 0
 	if ! flock -n 9; then
 		local detenteur
@@ -411,10 +413,10 @@ declare -a _ATTENTION_LOCALE=()
 point_attention() {
 	local msg="$1" cmd="${2:-}" f="${ACMECHANIC_ATTENTION_FICHIER:-}"
 	warn "$msg${cmd:+ -> $cmd}"
-	msg="${msg//|/ }" cmd="${cmd//|/ }"
-	_ATTENTION_LOCALE+=("$SERVICE_NAME|$msg|$cmd")
+	# Separateur \x1f (US) : un message ou une commande peut contenir « | ».
+	_ATTENTION_LOCALE+=("$SERVICE_NAME"$'\x1f'"$msg"$'\x1f'"$cmd")
 	[ -n "$f" ] || return 0
-	_sous_verrou "$f" sh -c 'printf "%s|%s|%s\n" "$1" "$2" "$3" >>"$4"' \
+	_sous_verrou "$f" sh -c 'printf "%s\037%s\037%s\n" "$1" "$2" "$3" >>"$4"' \
 		sh "$SERVICE_NAME" "$msg" "$cmd" "$f" 2>/dev/null || true
 }
 
@@ -435,7 +437,7 @@ rapport_attention() {
 	echo
 	printf ' %s%s%s %s%s\n' "$gras" "$jaune" "$icone" "$(t titre_attention)" "$raz"
 	for ligne in "${lignes[@]}"; do
-		IFS='|' read -r nom msg cmd <<<"$ligne"
+		IFS=$'\x1f' read -r nom msg cmd <<<"$ligne"
 		printf '  %s%s%s %s%-14s%s %s\n' "$jaune" "$icone" "$raz" "$gras" "$nom" "$raz" "$msg"
 		[ -n "$cmd" ] && printf '  %17s%s%s %s%s\n' "" "$terne" "$fleche" "$(t attention_commande "$cmd")" "$raz"
 	done

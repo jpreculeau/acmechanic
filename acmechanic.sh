@@ -55,6 +55,7 @@ OPTIONS
     --services    uniquement les services
     --systeme     uniquement le systeme (Nala, ou APT)
     --liste       ce qui serait fait, sans rien faire
+    --themes      themes d'affichage disponibles (ACMECHANIC_THEME)
     --version     version
     --aide, -h    cette aide
 
@@ -65,6 +66,22 @@ EOF
 case "${1:-}" in
 --version) echo "acmechanic ${ACMECHANIC_VERSION}"; exit 0 ;;
 --aide | --help | -h) afficher_aide; exit 0 ;;
+--themes)
+	# Apercu de chaque theme dans la langue choisie (local.conf lu).
+	# shellcheck source=lib/i18n.sh
+	source "${ACMECHANIC_HOME}/lib/i18n.sh"
+	# shellcheck source=config.sh
+	source "${ACMECHANIC_HOME}/config.sh"
+	actif="${ACMECHANIC_THEME:-acme}"
+	while read -r theme; do
+		ACMECHANIC_THEME="$theme" i18n_charger
+		printf '%s %-10s %s\n  %12s%s  ·  %s\n' "$([ "$theme" = "$actif" ] && echo '*' || echo ' ')" \
+			"$theme" "${MSG[sous_titre]}" "" "${MSG[bruit_maj]}" "${MSG[fin_ok]}"
+	done < <(i18n_themes)
+	echo
+	echo "ACMECHANIC_THEME=<theme> dans local.conf (langue : $(i18n_langue))"
+	exit 0
+	;;
 esac
 
 SERVICE_NAME="acmechanic"
@@ -228,7 +245,7 @@ case "${1:-}" in
 "") ;;
 *)
 	err "Option inconnue : $1"
-	echo "Options : --services, --systeme, --liste, --version, --aide"
+	echo "Options : --services, --systeme, --liste, --themes, --version, --aide"
 	exit 1
 	;;
 esac

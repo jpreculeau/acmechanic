@@ -63,7 +63,8 @@ fi
 
 # --- 3. Mesure sans modification -------------------------------------------------
 if [ -z "$ACMEFRAG_CIBLE" ]; then
-	ignorer_etape "AcmeFrag : mesure" "ACMEFRAG_CIBLE non definie"
+	# Choix de configuration, pas un incident : simple mention au journal.
+	log "AcmeFrag : mesure desactivee (ACMEFRAG_CIBLE non definie)."
 elif [ ! -d "$ACMEFRAG_CIBLE" ]; then
 	ignorer_etape "AcmeFrag : mesure" "dossier absent : $ACMEFRAG_CIBLE (disque debranche ?)"
 else

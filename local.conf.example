@@ -29,6 +29,7 @@
 
 # --- Affichage ---
 # ACMECHANIC_LANGUE=fr               # fr, en... (défaut : langue du système)
+# ACMECHANIC_THEME=kaiju             # acme (défaut), droides, kaiju, matrice, cyborg, delorean, vaisseau
 # declare -A ICONES_SERVICES=([mon-app]=$'\xef\x80\x95')   # icône Nerd Font d'un cadre
 
 # --- Maintenance de la machine ---

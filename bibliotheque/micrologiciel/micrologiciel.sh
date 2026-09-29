@@ -42,7 +42,7 @@ if command -v rpi-eeprom-update >/dev/null 2>&1; then
 	1)
 		point_attention "EEPROM : mise a jour disponible (${actuelle%% (*} -> ${derniere%% (*})" \
 			"sudo rpi-eeprom-update -a && sudo reboot"
-		enregistrer_version "eeprom" "${actuelle%% (*}" "disponible : ${derniere%% (*}"
+		enregistrer_version "eeprom" "${actuelle%% (*}" "${actuelle%% (*}"
 		;;
 	*)
 		err "EEPROM : verification impossible (code $code)."

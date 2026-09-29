@@ -11,6 +11,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 - Auto-mise à jour d'Acmechanic en fin de run (`ACMECHANIC_AUTO_MAJ=oui|signaler|non`).
 - `etape` (lib/service.sh) : comme `run_etape`, mais renvoie 1 en cas d'échec.
 - `ROADMAP.md` : 1.5 multi-distributions (dnf, pacman, zypper, apk).
+- Thèmes d'affichage en français et en anglais : `droides`, `kaiju`, `matrice`, `cyborg`, `delorean`, `vaisseau` (`ACMECHANIC_THEME`, aperçu : `acmechanic --themes`).
 - Langues : catalogues `locale/fr.sh` et `locale/en.sh`, `ACMECHANIC_LANGUE`, autres langues par simple catalogue (test de complétude).
 - Points d'attention : `point_attention "message" "commande"` pour tout service, regroupés en fin de passage (redémarrage requis, micrologiciel, auto-mise à jour non appliquée…).
 - Cadres rangés du plus rapide au plus lent selon les durées réelles du passage précédent (`~/logs/acmechanic/durees`).

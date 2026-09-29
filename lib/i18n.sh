@@ -11,6 +11,10 @@
 #     traduire. tests/run_tests.sh verifie que chaque catalogue a
 #     exactement les cles de la reference.
 #
+# Themes : locale/themes/<theme>/<langue>.sh remplacent seulement les
+# textes « fun » (statuts, onomatopees, titres, fin). ACMECHANIC_THEME
+# (local.conf) ; sans fichier pour la langue, la version anglaise du theme.
+#
 # Les textes peuvent contenir des %s / %d (format printf) : t les remplit.
 # Les journaux (log/ok/warn/err) restent en francais : voir ROADMAP.md.
 #
@@ -44,6 +48,30 @@ i18n_charger() {
 	# shellcheck source=/dev/null
 	[ "$l" != fr ] && source "$_I18N_DOSSIER/$l.sh"
 	I18N_LANGUE="$l"
+	# Theme (facultatif) par-dessus la langue.
+	local th="${ACMECHANIC_THEME:-}" d
+	I18N_THEME=""
+	case "$th" in "" | acme) return 0 ;; esac
+	d="$_I18N_DOSSIER/themes/$th"
+	if [ -r "$d/$l.sh" ]; then
+		# shellcheck source=/dev/null
+		source "$d/$l.sh"
+	elif [ -r "$d/en.sh" ]; then
+		# shellcheck source=/dev/null
+		source "$d/en.sh"
+	else
+		return 0
+	fi
+	I18N_THEME="$th"
+}
+
+# i18n_themes : noms des themes disponibles, un par ligne.
+i18n_themes() {
+	local d
+	echo acme
+	for d in "$_I18N_DOSSIER"/themes/*/; do
+		[ -d "$d" ] && basename "$d"
+	done
 }
 
 # t <cle> [valeurs...] : texte traduit, rempli par printf. Une cle

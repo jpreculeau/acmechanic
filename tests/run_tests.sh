@@ -17,7 +17,7 @@ not() { ! "$@"; }
 eq() { [[ "$1" == "$2" ]] || { printf '       attendu [%s] obtenu [%s]\n' "$2" "$1"; return 1; }; }
 
 export LC_ALL=C.UTF-8 NO_COLOR=1 ACMECHANIC_TABLEAU=non LIMITES_RESSOURCES=non
-export LOG_DIR="$TMP/logs" BACKUP_ROOT="$TMP/backups" CACHE_REGISTRE_DIR="$TMP/cache"
+export LOG_DIR="$TMP/logs" BACKUP_ROOT="$TMP/backups" CACHE_REGISTRE_DIR="$TMP/cache" VERROU_DIR="$TMP"
 export ACMECHANIC_HOME="$ROOT"
 
 echo "syntaxe"
@@ -174,6 +174,20 @@ check "anglais par defaut sous LANG=C" eq "$(env -u ACMECHANIC_LANGUE LC_ALL=C b
 check "ACMECHANIC_LANGUE=fr" eq "$(ACMECHANIC_LANGUE=fr bash -c 'source "$1/lib/i18n.sh"; t fin_echec 2' _ "$ROOT")" "Patatras ! 2 étape(s) en échec."
 check "langue sans catalogue : anglais" eq "$(ACMECHANIC_LANGUE=de bash -c 'source "$1/lib/i18n.sh"; echo "$I18N_LANGUE"' _ "$ROOT")" "en"
 
+echo "themes (locale/themes)"
+for d in "$ROOT"/locale/themes/*/; do
+	th="$(basename "$d")"
+	for c in fr en; do
+		check "theme $th : $c.sh present" test -r "$d/$c.sh"
+		extra="$(comm -23 <(cles "$d/$c.sh") <(cles "$ROOT/locale/fr.sh"))"
+		check "theme $th/$c : seulement des cles connues" eq "$extra" ""
+		check "theme $th/$c : %d garde dans fin_echec" grep -q 'fin_echec\]=".*%d' "$d/$c.sh"
+	done
+done
+check "theme applique par-dessus la langue" eq "$(ACMECHANIC_LANGUE=fr ACMECHANIC_THEME=kaiju bash -c 'source "$1/lib/i18n.sh"; echo "${MSG[bruit_maj]}|${MSG[journal]}"' _ "$ROOT")" "RRRAAAWR !|Journal complet : %s"
+check "theme inconnu : sans effet" eq "$(ACMECHANIC_LANGUE=fr ACMECHANIC_THEME=nimporte bash -c 'source "$1/lib/i18n.sh"; t fin_ok' _ "$ROOT")" "Rideau ! Tout est en ordre."
+check "--themes liste les themes" grep -q 'kaiju' <("$ROOT/acmechanic.sh" --themes)
+
 echo "points d'attention"
 out="$(bash -c '
 	SERVICE_NAME=att; source "$ACMECHANIC_HOME/lib/common.sh"
@@ -181,10 +195,10 @@ out="$(bash -c '
 	point_attention "EEPROM a mettre a jour" "sudo rpi-eeprom-update -a"
 	cat "$ACMECHANIC_ATTENTION_FICHIER"
 ' 2>/dev/null | tail -1)"
-check "point_attention : fichier partage (service|message|commande)" eq "$out" "att|EEPROM a mettre a jour|sudo rpi-eeprom-update -a"
-out="$(bash -c 'SERVICE_NAME=att; source "$ACMECHANIC_HOME/lib/common.sh"; point_attention "A faire" "cmd x" >/dev/null; rapport_attention ""' 2>/dev/null)"
+check "point_attention : fichier partage (service, message, commande)" eq "$(tr '\037' '|' <<<"$out")" "att|EEPROM a mettre a jour|sudo rpi-eeprom-update -a"
+out="$(bash -c 'SERVICE_NAME=att; source "$ACMECHANIC_HOME/lib/common.sh"; point_attention "A faire" "curl x | sh" >/dev/null; rapport_attention ""' 2>/dev/null)"
 check "rapport_attention : message et commande" grep -q 'A faire' <<<"$out"
-check "rapport_attention : commande a lancer" grep -q 'cmd x' <<<"$out"
+check "rapport_attention : commande avec | intacte" grep -qF 'curl x | sh' <<<"$out"
 
 echo "sauvegardes (lib/backup.sh)"
 out="$(bash -c '

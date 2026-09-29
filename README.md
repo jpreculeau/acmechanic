@@ -69,6 +69,7 @@ acmechanic --liste      # ce qui serait fait, sans rien faire
 | `--services` | Uniquement les services |
 | `--systeme` | Uniquement le système (Nala, ou APT) |
 | `--liste` | Services détectés, écartés, ordre imposé — sans rien exécuter |
+| `--themes` | Aperçu des thèmes d'affichage |
 | `--version` | Version |
 | `--aide`, `-h` | Aide |
 
@@ -79,6 +80,7 @@ Le code de sortie est le **nombre d'étapes en échec** (0 = tout va bien) : pra
 | `ACMECHANIC_TABLEAU=non` | Affichage ligne à ligne (automatique hors terminal) |
 | `ACMECHANIC_ICONES=non` | Symboles Unicode simples au lieu des icônes Nerd Font |
 | `LIMITES_RESSOURCES=non` | Pas de cgroup ni de `nice`/`ionice` |
+| `ACMECHANIC_THEME=kaiju` | Thème d'affichage (`acmechanic --themes` pour la liste) |
 | `ACMECHANIC_LANGUE=en` | Langue de l'affichage (`fr`, `en`… ; défaut : celle du système, anglais à défaut) |
 | `ACMECHANIC_AUTO_MAJ=signaler` | Prévenir d'une nouvelle version d'Acmechanic sans l'appliquer (`non` : ne rien faire) |
 
@@ -92,7 +94,21 @@ Pour imposer un ordre : `ln -s ../services/a/a.sh ordre.d/10-a.sh` (les services
 
 ## 🌍 Langues
 
-Les textes affichés viennent de catalogues `locale/<langue>.sh` : `fr.sh` (référence) et `en.sh`. La langue suit `ACMECHANIC_LANGUE`, sinon celle du système (`LANG`), et l'anglais s'il n'existe pas de catalogue. **Ajouter une langue** : copier `locale/en.sh` en `locale/<code>.sh`, traduire, `make test` vérifie qu'aucune clé ne manque. Les messages du journal restent en français pour l'instant (voir la [feuille de route](ROADMAP.md)).
+Les textes affichés viennent de catalogues `locale/<langue>.sh` : `fr.sh` (référence) et `en.sh`. La langue suit `ACMECHANIC_LANGUE`, sinon celle du système (`LANG`), et l'anglais s'il n'existe pas de catalogue. **Thèmes** : `acmechanic --themes` montre un aperçu de chacun, `ACMECHANIC_THEME=<thème>` dans `local.conf` l'active. Chaque thème existe en français et en anglais et ne remplace que les textes « fun » (statuts, onomatopées, fin) :
+
+| Thème | Univers | Exemple de fin |
+|---|---|---|
+| `acme` *(défaut)* | dessin animé | Rideau ! Tout est en ordre. |
+| `droides` | droïdes de protocole et d'astromécanique | Bip-bouip ! Les droïdes ont tout réparé. |
+| `kaiju` | monstre géant sorti de l'océan | Le monstre retourne à l'océan. Tokyo est sauvée. |
+| `matrice` | réalité simulée, code vert | Vous êtes libéré. Tout est en ordre. |
+| `cyborg` | cyborg venu du futur | Mission accomplie. Je reviendrai. |
+| `delorean` | voiture à remonter le temps | Des mises à jour ? Là où on va, on n'en a pas besoin. |
+| `vaisseau` | vaisseau d'exploration spatiale | Journal de bord : tous les systèmes sont opérationnels. |
+
+Les thèmes sont des clins d'œil de fans, sans lien avec les ayants droit des univers évoqués. Nouveau thème : un dossier `locale/themes/<nom>/` avec `fr.sh` et `en.sh` (voir un thème existant) ; `make test` vérifie les clés.
+
+**Ajouter une langue** : copier `locale/en.sh` en `locale/<code>.sh`, traduire, `make test` vérifie qu'aucune clé ne manque. Les messages du journal restent en français pour l'instant (voir la [feuille de route](ROADMAP.md)).
 
 ## ⚙️ Configuration
 
@@ -127,7 +143,7 @@ acmechanic/
 │   ├── backup.sh          # archives + manifeste SHA-256 + rotation
 │   ├── service.sh         # socle des services (docker_standard...)
 │   └── i18n.sh            # langues (t, tv)
-├── locale/                # catalogues fr.sh (référence), en.sh
+├── locale/                # catalogues fr.sh (référence), en.sh, themes/
 │   └── tableau.sh         # affichage fixe (cases, icônes, couleurs)
 ├── services/              # VOS services (ignorés par git)
 ├── ordre.d/               # liens d'ordre (ignorés par git)
