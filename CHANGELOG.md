@@ -17,6 +17,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 - `bureau` : gestionnaire de fenêtres et barre de menu (ex. nwg-panel installé depuis git avec des correctifs locaux : fusion des branches, `git rerere`, retour arrière, relance proposée).
 - `outils-ia` : mise à jour d'Ollama par l'installeur officiel (`OLLAMA_MAJ=oui`), état du service conservé, retour à l'ancienne version en cas d'échec.
 - Actions proposées : en fin de passage, chaque commande des points d'attention est proposée (non par défaut, redémarrage en dernier, rien hors terminal) ; `acmechanic --actions` les repropose ; `ACMECHANIC_PROPOSER=non` pour désactiver.
+- Ascenseur à la molette et au clavier (flèches, Page préc./suiv., Début/Fin), reprise du suivi automatique après 20 s (`ACMECHANIC_DEFIL_PAUSE`) ; `ACMECHANIC_SOURIS=non` pour garder la sélection à la souris.
+- Écran vidé en toute première action (affichage fixe).
 - Ascenseur : au moins `ACMECHANIC_LIGNES_MIN` (6) lignes par cadre ; si la grille dépasse l'écran, elle défile et les services terminés sont poussés vers le haut. Une dernière rangée incomplète prend toute la largeur.
 - Cadres rangés du plus rapide au plus lent selon les durées réelles du passage précédent (`~/logs/acmechanic/durees`).
 

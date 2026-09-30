@@ -192,6 +192,17 @@ ACMECHANIC_LIGNES_MIN=2 _tableau_disposition 4 24 80
 check "ACMECHANIC_LIGNES_MIN=2 : tout tient" eq "$_K/$_DEFIL" "3/non"
 _tableau_disposition 9 50 200
 check "200x50, 9 services : 3 colonnes, detail plafonne a 12" eq "$_NCOL/$_NRANG/$_K/$_DEFIL" "3/3/12/non"
+_DEFIL_AUTO=12 _DEFIL_VUE=10 _DEFIL_MAN=""
+_tableau_touche "[<65;40;12M"
+check "molette vers le bas : +3 lignes depuis la position automatique" eq "$_DEFIL_MAN" "15"
+_tableau_touche "[<64;40;12M"; _tableau_touche "[<64;40;12M"
+check "molette vers le haut : -3 lignes par cran" eq "$_DEFIL_MAN" "9"
+_tableau_touche "[5~"
+check "Page precedente : une hauteur d'ecran" eq "$_DEFIL_MAN" "-1"
+_tableau_touche "[F"
+check "Fin : retour au suivi automatique" eq "$_DEFIL_MAN" ""
+_tableau_touche "[<35;1;1M"
+check "mouvement de souris sans bouton : ignore" eq "$_DEFIL_MAN" ""
 _tableau_cadrer "école" 8
 check "cadrage en caracteres (accents)" eq "${#_CADRE}" "8"
 _tableau_duree 125

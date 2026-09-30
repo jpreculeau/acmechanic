@@ -153,19 +153,40 @@ tableau_demarrer() {
 	TABLEAU_DEBUT="$EPOCHSECONDS"
 	rm -f "$TABLEAU_DOSSIER/.dessine"
 	printf '\033[?25l' >/dev/tty # curseur masque pendant l'affichage
+	# Ascenseur a la molette et au clavier : terminal en mode caractere
+	# (sans echo, Ctrl+C garde) et suivi de la souris (SGR 1006). Tout est
+	# remis en etat par tableau_arreter, y compris sur interruption.
+	_TABLEAU_STTY=""
+	if [ "${ACMECHANIC_SOURIS:-oui}" = oui ] && _TABLEAU_STTY="$(stty -g </dev/tty 2>/dev/null)"; then
+		stty -icanon -echo min 1 time 0 </dev/tty 2>/dev/null
+		printf '\033[?1000h\033[?1006h' >/dev/tty
+	fi
 	_tableau_boucle </dev/null >/dev/tty 2>/dev/null 9>&- &
 	TABLEAU_PID=$!
+}
+
+# tableau_liberer_terminal : fin du suivi de la souris, mode normal.
+tableau_liberer_terminal() {
+	[ -n "${_TABLEAU_STTY:-}" ] || return 0
+	printf '\033[?1000l\033[?1006l' >/dev/tty 2>/dev/null
+	stty "$_TABLEAU_STTY" </dev/tty 2>/dev/null
+	_TABLEAU_STTY=""
 }
 
 # tableau_arreter : arrete l'affichage, dessine l'etat final, rend le
 # curseur. Sans effet si le tableau n'est pas actif (idempotent).
 tableau_arreter() {
-	[ -n "$TABLEAU_PID" ] || return 0
-	kill -TERM "$TABLEAU_PID" 2>/dev/null
-	wait "$TABLEAU_PID" 2>/dev/null
-	TABLEAU_PID=""
-	(_tableau_utf8 && _tableau_dessiner final) >/dev/tty 2>/dev/null
-	printf '\033[?25h' >/dev/tty 2>/dev/null
+	if [ -n "$TABLEAU_PID" ]; then
+		kill -TERM "$TABLEAU_PID" 2>/dev/null
+		wait "$TABLEAU_PID" 2>/dev/null
+		TABLEAU_PID=""
+		(_tableau_utf8 && _tableau_dessiner final) >/dev/tty 2>/dev/null
+		printf '\033[?25h' >/dev/tty 2>/dev/null
+	fi
+	# Terminal rendu APRES l'arret de l'affichage : un `read` interrompu
+	# remet en partant les reglages qu'il avait trouves (mode caractere).
+	# Toujours execute, meme si l'affichage est deja mort.
+	tableau_liberer_terminal
 }
 
 # Boucle d'affichage. SIGTERM ne l'interrompt qu'ENTRE deux images :
@@ -179,10 +200,46 @@ _tableau_boucle() {
 	# Ctrl+C touche tout le groupe de processus : l'affichage l'ignore et
 	# attend le TERM de tableau_arreter (appele par le trap de Acmechanic).
 	trap '' INT
+	local cle c seq
 	while [ -z "$fin" ]; do
 		_tableau_dessiner
-		sleep 0.5
+		# Attente de 0,5 s, ecourtee par la molette ou une touche : l'image
+		# suit aussitot. Sans terminal lisible : simple pause.
+		if [ -z "${_TABLEAU_STTY:-}" ]; then
+			sleep 0.5
+			continue
+		fi
+		IFS= read -rsn1 -t 0.5 cle </dev/tty 2>/dev/null || continue
+		[ "$cle" = $'\e' ] || continue
+		seq=""
+		while IFS= read -rsn1 -t 0.05 c </dev/tty 2>/dev/null; do
+			seq+="$c"
+			[[ "$c" =~ [A-Za-z~] ]] && break
+		done
+		_tableau_touche "$seq"
 	done
+}
+
+# _tableau_touche <sequence> : molette (SGR 64/65), fleches, Page
+# precedente/suivante, Debut/Fin. Le defilement manuel l'emporte sur le
+# suivi automatique pendant ACMECHANIC_DEFIL_PAUSE secondes (20) apres
+# la derniere action ; Fin rend la main au suivi automatique.
+_DEFIL_MAN="" _DEFIL_T=0 _DEFIL_AUTO=0 _DEFIL_VUE=10
+_tableau_touche() {
+	local pas=0
+	case "$1" in
+	"[<64;"*[Mm]) pas=-3 ;;
+	"[<65;"*[Mm]) pas=3 ;;
+	"[A") pas=-1 ;;
+	"[B") pas=1 ;;
+	"[5~") pas=$((-_DEFIL_VUE)) ;;
+	"[6~") pas=$_DEFIL_VUE ;;
+	"[H" | "[1~") _DEFIL_MAN=0 _DEFIL_T=$EPOCHSECONDS; return ;;
+	"[F" | "[4~") _DEFIL_MAN=""; return ;;
+	*) return ;;
+	esac
+	_DEFIL_MAN=$((${_DEFIL_MAN:-$_DEFIL_AUTO} + pas))
+	_DEFIL_T=$EPOCHSECONDS
 }
 
 # _tableau_details <fichier> <k> : range dans _DETAILS les k dernieres
@@ -441,6 +498,15 @@ _tableau_dessiner() {
 		[ "$r0" -lt 0 ] && r0="$_NRANG"
 		debut=$((r0 * hc))
 		[ "$debut" -gt $((total - vue)) ] && debut=$((total - vue))
+		# Defilement manuel (molette, clavier) recent : il l'emporte.
+		_DEFIL_AUTO="$debut" _DEFIL_VUE="$vue"
+		if [ -n "${_DEFIL_MAN:-}" ] && [ $((EPOCHSECONDS - _DEFIL_T)) -lt "${ACMECHANIC_DEFIL_PAUSE:-20}" ]; then
+			[ "$_DEFIL_MAN" -lt 0 ] && _DEFIL_MAN=0
+			[ "$_DEFIL_MAN" -gt $((total - vue)) ] && _DEFIL_MAN=$((total - vue))
+			debut="$_DEFIL_MAN"
+		else
+			_DEFIL_MAN=""
+		fi
 		taille=$((vue * vue / total))
 		[ "$taille" -lt 1 ] && taille=1
 		curseur=$((debut * vue / total))

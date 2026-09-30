@@ -261,6 +261,12 @@ case "${1:-}" in
 	;;
 esac
 
+# Ecran vide en toute premiere action (affichage fixe) : rien de la
+# session precedente ne reste au-dessus ni dans le defilement.
+if [ -t 1 ] && [ "${ACMECHANIC_TABLEAU:-oui}" = oui ]; then
+	printf '\033[H\033[2J\033[3J'
+fi
+
 prendre_verrou acmechanic
 
 titre "MISE A JOUR GLOBALE (ACMECHANIC)"
