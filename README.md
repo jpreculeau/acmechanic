@@ -104,7 +104,7 @@ Les textes affichés viennent de catalogues `locale/<langue>.sh` : `fr.sh` (réf
 | Thème | Univers | Exemple de fin (VF) |
 |---|---|---|
 | `acme` *(défaut)* | dessin animé | Rideau ! Tout est en ordre. |
-| `starwars` | Star Wars — R2-D2 et C-3PO | Que la Force soit avec toi. Tout est en ordre. |
+| `starwars` | Star Wars — Z-6PO parle, R2-D2 bipe | Je suis Z-6PO, relations humains-cyborgs. Tout est en ordre. |
 | `godzilla` | Godzilla, le Roi des Monstres | Le Roi des Monstres retourne à l'océan. Tokyo est sauvée. |
 | `matrix` | Matrix | Bienvenue dans le monde réel. Tout est en ordre. |
 | `terminator` | Terminator — T-800, Skynet | Hasta la vista, baby. Mission accomplie. |
