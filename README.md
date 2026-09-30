@@ -83,6 +83,7 @@ Le code de sortie est le **nombre d'étapes en échec** (0 = tout va bien) : pra
 | `ACMECHANIC_ICONES=non` | Symboles Unicode simples au lieu des icônes Nerd Font |
 | `LIMITES_RESSOURCES=non` | Pas de cgroup ni de `nice`/`ionice` |
 | `ACMECHANIC_PROPOSER=non` | Ne pas proposer de lancer les actions en fin de passage |
+| `ACMECHANIC_DELAI_REPONSE=30` | Délai (s) des questions, avec décompte ; passé ce délai, la réponse par défaut (non) s'applique. `0` = sans limite |
 | `ACMECHANIC_SOURIS=non` | Pas de défilement à la molette (garde la sélection de texte à la souris) |
 | `ACMECHANIC_LIGNES_MIN=8` | Lignes de détail minimum par cadre (défaut 6) ; au-delà de l'écran, la grille défile |
 | `ACMECHANIC_THEME=godzilla` | Thème d'affichage (`acmechanic --themes` pour la liste ; `hasard` : tiré au sort à chaque passage) |

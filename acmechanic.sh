@@ -333,30 +333,46 @@ DOSSIER_ETAT="$LOG_DIR/etat"
 mkdir -p "$DOSSIER_ETAT"
 rm -f "$DOSSIER_ETAT"/* "$DOSSIER_ETAT"/.dessine
 
+# Gestionnaire de paquets : nala s'il est la, sinon APT. Le
+# rafraichissement anticipe vaut pour les deux.
+GESTIONNAIRE=""
+if command -v nala >/dev/null 2>&1; then
+	GESTIONNAIRE=nala
+elif command -v apt-get >/dev/null 2>&1; then
+	GESTIONNAIRE=apt-get
+fi
+
+# Sortie du rafraichissement anticipe : visible a l'ecran dans la case
+# « systeme » tant qu'elle attend les services (lib/tableau.sh lit
+# <case>.anticipe), puis versee au journal par attendre_rafraichissement.
+FICHIER_ANTICIPE="$DOSSIER_SORTIES/systeme.anticipe"
+rm -f "$DOSSIER_SORTIES"/*.anticipe
 PID_RAFRAICHISSEMENT=""
-if [ "$faire_systeme" = true ] && [ "$SUDO_OK" = true ] && command -v nala >/dev/null 2>&1; then
-	fichier_temp FICHIER_RAFRAICHISSEMENT /tmp/acmechanic-nala-update-XXXXXX
-	echo "Depots : rafraichissement en arriere-plan" >"$DOSSIER_ETAT/systeme"
+if [ "$faire_systeme" = true ] && [ "$SUDO_OK" = true ] && [ -n "$GESTIONNAIRE" ]; then
+	fichier_temp FICHIER_RAFRAICHISSEMENT /tmp/acmechanic-depots-XXXXXX
 	(
-		timeout 600 sudo -n env DEBIAN_FRONTEND=noninteractive nala update \
-			>"$FICHIER_RAFRAICHISSEMENT" 2>&1
+		printf '\x1fETAPE\x1f%s\n' "$(t anticipe_debut "$GESTIONNAIRE update")"
+		timeout 600 sudo -n env DEBIAN_FRONTEND=noninteractive "$GESTIONNAIRE" update 2>&1
 		code_maj=$?
-		# Message AVANT le code : une fois le code ecrit, la section
-		# systeme peut demarrer et ecrire ses propres etapes.
-		echo "Depots rafraichis (code $code_maj), en attente des services" >"$DOSSIER_ETAT/systeme"
-		echo "CODE=$code_maj" >>"$FICHIER_RAFRAICHISSEMENT"
-	) </dev/null 9>&- &
+		if [ "$code_maj" -eq 0 ]; then
+			printf '\x1fOK\x1f%s\n' "$(t anticipe_ok)"
+		else
+			printf '\x1fERREUR\x1f%s\n' "$(t anticipe_echec "$code_maj")"
+		fi
+		# Code ecrit en DERNIER : la section systeme l'attend.
+		echo "CODE=$code_maj" >"$FICHIER_RAFRAICHISSEMENT"
+	) </dev/null >"$FICHIER_ANTICIPE" 9>&- &
 	PID_RAFRAICHISSEMENT=$!
 fi
 
-# attendre_rafraichissement : attend la fin du `nala update` anticipe et
-# renvoie son code (appele via run_etape, donc dans un sous-shell :
+# attendre_rafraichissement : attend la fin du rafraichissement anticipe
+# et renvoie son code (appele via run_etape, donc dans un sous-shell :
 # on ne peut pas `wait` sur le PID, on lit le code dans le fichier).
 attendre_rafraichissement() {
 	while ! grep -q '^CODE=' "$FICHIER_RAFRAICHISSEMENT" 2>/dev/null; do
 		sleep 1
 	done
-	sed '$d' "$FICHIER_RAFRAICHISSEMENT" >>"$LOG_FILE"
+	tr -d '\037' <"$FICHIER_ANTICIPE" >>"$LOG_FILE"
 	return "$(sed -n 's/^CODE=//p' "$FICHIER_RAFRAICHISSEMENT" | tail -1)"
 }
 
@@ -589,27 +605,29 @@ if [ "$faire_systeme" = true ]; then
 
 	if [ "$SUDO_OK" != true ]; then
 		ignorer_etape "Mise a jour du systeme" "sudo indisponible sans mot de passe"
-	elif command -v nala >/dev/null 2>&1; then
+	elif [ -n "$GESTIONNAIRE" ]; then
 		# DEBIAN_FRONTEND=noninteractive : aucune question posee pendant
 		# l'installation, indispensable sans surveillance.
+		nom_gest="Nala"
+		[ "$GESTIONNAIRE" = apt-get ] && nom_gest="APT"
 		if [ -n "$PID_RAFRAICHISSEMENT" ]; then
-			run_etape "Nala : rafraichissement des depots (anticipe)" 600 \
+			run_etape "$nom_gest : rafraichissement des depots (anticipe)" 600 \
 				attendre_rafraichissement
 		else
-			run_etape "Nala : rafraichissement des depots" 600 \
-				sudo -n env DEBIAN_FRONTEND=noninteractive nala update
+			run_etape "$nom_gest : rafraichissement des depots" 600 \
+				sudo -n env DEBIAN_FRONTEND=noninteractive "$GESTIONNAIRE" update
 		fi
-		run_etape "Nala : mise a jour des paquets" "$DELAI_SYSTEME" \
-			sudo -n env DEBIAN_FRONTEND=noninteractive nala upgrade -y
-		run_etape "Nala : suppression des paquets inutiles" 600 \
-			sudo -n env DEBIAN_FRONTEND=noninteractive nala autoremove -y
-	elif command -v apt-get >/dev/null 2>&1; then
-		run_etape "APT : rafraichissement des depots" 600 \
-			sudo -n env DEBIAN_FRONTEND=noninteractive apt-get update
-		run_etape "APT : mise a jour des paquets" "$DELAI_SYSTEME" \
-			sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -y full-upgrade
-		run_etape "APT : suppression des paquets inutiles" 600 \
-			sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -y autoremove
+		if [ "$GESTIONNAIRE" = nala ]; then
+			run_etape "Nala : mise a jour des paquets" "$DELAI_SYSTEME" \
+				sudo -n env DEBIAN_FRONTEND=noninteractive nala upgrade -y
+			run_etape "Nala : suppression des paquets inutiles" 600 \
+				sudo -n env DEBIAN_FRONTEND=noninteractive nala autoremove -y
+		else
+			run_etape "APT : mise a jour des paquets" "$DELAI_SYSTEME" \
+				sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -y full-upgrade
+			run_etape "APT : suppression des paquets inutiles" 600 \
+				sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -y autoremove
+		fi
 	else
 		ignorer_etape "Mise a jour du systeme" "ni Nala ni APT trouve"
 	fi

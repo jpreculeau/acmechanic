@@ -46,6 +46,10 @@ MSG=(
 	[action_echec]="Échec (code %d)."
 	[action_plus_tard]="Pour y revenir plus tard : acmechanic --actions"
 	[action_redemarrage]="redémarre la machine, proposé en dernier"
+	[delai_ecoule]="Délai écoulé : réponse par défaut (non)."
+	[anticipe_debut]="Anticipé pendant les services : %s"
+	[anticipe_ok]="Dépôts rafraîchis ; mise à jour des paquets après les services."
+	[anticipe_echec]="Rafraîchissement anticipé en échec (code %d)."
 	[aucune_action]="Aucune action en attente."
 	[titre_versions]="Versions"
 	# --- Fin ---

@@ -203,6 +203,12 @@ _tableau_touche "[F"
 check "Fin : retour au suivi automatique" eq "$_DEFIL_MAN" ""
 _tableau_touche "[<35;1;1M"
 check "mouvement de souris sans bouton : ignore" eq "$_DEFIL_MAN" ""
+D_ANT="$TMP/anticipe"; mkdir -p "$D_ANT"
+printf '\x1fETAPE\x1fAnticipé pendant les services : nala update\nFetched 42 kB\n' >"$D_ANT/systeme.anticipe"
+( TABLEAU_DOSSIER="$D_ANT" TABLEAU_SORTIES="$D_ANT" _K=4 _LARG=60 _BRUIT=""
+  _tableau_cadre systeme 0; printf '%s\n' "${_CADRE_L[@]}" ) >"$TMP/cadre-anticipe" 2>&1
+check "tache anticipee visible dans une case en attente" grep -q 'Fetched 42 kB' "$TMP/cadre-anticipe"
+check "tache anticipee : son etape affichee" grep -q 'nala update' "$TMP/cadre-anticipe"
 _tableau_cadrer "école" 8
 check "cadrage en caracteres (accents)" eq "${#_CADRE}" "8"
 _tableau_duree 125
@@ -283,6 +289,11 @@ check "actions : refusee => rien" not test -e "$TMP/fait2"
 check "actions : redemarrage propose en dernier" eq "$(grep -o 'lancer « [^»]*»' <<<"$out" | tr '\n' ';')" "lancer « touch $TMP/fait1 »;lancer « touch $TMP/fait2 »;lancer « sudo reboot »;"
 out="$(ACMECHANIC_PROPOSER=oui bash -c 'SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"; proposer_actions "$1"' _ "$A" </dev/null 2>&1)"
 check "actions : rien demande hors terminal" eq "$out" ""
+printf 'svc\x1fLent\x1ftouch %s/fait3\n' "$TMP" >"$A"
+out="$(sleep 2 | ACMECHANIC_DELAI_REPONSE=1 ACMECHANIC_PROPOSER=force ACMECHANIC_LANGUE=fr bash -c 'SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"; proposer_actions "$1"' _ "$A" 2>/dev/null)"
+check "actions : delai ecoule => reponse par defaut (non)" not test -e "$TMP/fait3"
+check "actions : delai ecoule annonce" grep -q 'Délai écoulé' <<<"$out"
+check "actions : decompte affiche dans la question" grep -qF '[  1 s]' <<<"$out"
 
 echo "sauvegardes (lib/backup.sh)"
 out="$(bash -c '

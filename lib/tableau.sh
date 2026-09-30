@@ -376,8 +376,12 @@ _tableau_cadre() {
 
 	# Contenu : K lignes, toujours. En attente : une invitation ; sinon
 	# les dernieres lignes de la sortie du service (gardees une fois fini).
+	# Une tache anticipee (<case>.anticipe, ex. rafraichissement des
+	# depots pendant les services) s'affiche des qu'elle tourne.
 	if [ "$statut" = "EN ATTENTE" ]; then
 		_DETAILS=("${MSG[coulisses]}")
+		[ -s "$TABLEAU_SORTIES/$nom.anticipe" ] &&
+			_tableau_details "$TABLEAU_SORTIES/$nom.anticipe" "$_K"
 	else
 		_tableau_details "$TABLEAU_SORTIES/$nom.sortie" "$_K"
 	fi

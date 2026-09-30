@@ -3,6 +3,12 @@
 Toutes les évolutions notables d'Acmechanic sont consignées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [SemVer](https://semver.org/lang/fr/).
 
+## [Non publié]
+
+### Ajouté
+- Questions avec décompte : sans réponse dans `ACMECHANIC_DELAI_REPONSE` secondes (30 par défaut, `0` = sans limite), la réponse par défaut (non) s'applique.
+- Tâches anticipées visibles : le rafraîchissement des dépôts lancé pendant les services s'affiche dans la case « systeme » dès qu'il tourne ; il vaut désormais pour APT comme pour Nala.
+
 ## [1.1.0] - 2026-09-29
 
 ### Ajouté

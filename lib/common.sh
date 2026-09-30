@@ -444,6 +444,48 @@ rapport_attention() {
 	return 0
 }
 
+# _question <entree> <invite> : pose une question avec un compte a rebours
+# (ACMECHANIC_DELAI_REPONSE secondes, 30 par defaut ; 0 = sans limite).
+# Reponse dans REPONSE ; delai ecoule -> REPONSE vide, donc la reponse par
+# defaut. Le decompte se met a jour en place quand l'invite tient sur une
+# ligne ; sinon il reste affiche tel quel, le delai s'applique pareil.
+_question() {
+	local entree="$1" invite="$2" delai="${ACMECHANIC_DELAI_REPONSE:-30}"
+	local reste code cols=0 vivant=non
+	REPONSE=""
+	[[ "$delai" =~ ^[0-9]+$ ]] || delai=30
+	if [ "$delai" -eq 0 ]; then
+		printf '  %s' "$invite"
+		read -r REPONSE <"$entree" || REPONSE=""
+		return 0
+	fi
+	if [ "$entree" = /dev/tty ]; then
+		read -r _ cols < <(stty size </dev/tty 2>/dev/null)
+		[ $((12 + ${#invite})) -lt "${cols:-0}" ] && vivant=oui
+	fi
+	printf '  [%3d s] %s' "$delai" "$invite"
+	code=0
+	if [ "$vivant" = oui ]; then
+		for ((reste = delai; reste > 0; reste--)); do
+			# \e7 / \e8 : sauve / rend la position du curseur (saisie en cours).
+			printf '\e7\r  [%3d s]\e8' "$reste"
+			read -r -t 1 REPONSE <"$entree" && return 0
+			code=$?
+			[ "$code" -gt 128 ] || break # fin d'entree, pas un delai
+		done
+	else
+		read -r -t "$delai" REPONSE <"$entree" && return 0
+		code=$?
+	fi
+	REPONSE=""
+	[ "$code" -gt 128 ] || return 0
+	# Delai ecoule : la saisie commencee est jetee (sinon elle servirait
+	# de reponse a la question suivante).
+	[ "$entree" = /dev/tty ] && read -r -s -t 0.05 -n 4096 _ </dev/tty 2>/dev/null
+	printf '\n  %s\n' "$(t delai_ecoule)"
+	return 0
+}
+
 # proposer_actions <fichier> : pour chaque point d'attention qui porte une
 # commande, demande s'il faut la lancer maintenant (non par defaut). Une
 # commande qui redemarre la machine est proposee en dernier. Rien n'est
@@ -477,9 +519,8 @@ proposer_actions() {
 	for ligne in "${actions[@]}"; do
 		IFS=$'\x1f' read -r nom msg cmd <<<"$ligne"
 		[[ " ${fin[*]} " == *"$cmd"* ]] && printf '  (%s)\n' "$(t action_redemarrage)"
-		printf '  %s' "$(t question_action "$nom" "$cmd")"
-		rep=""
-		read -r rep <"$entree" || rep=""
+		_question "$entree" "$(t question_action "$nom" "$cmd")"
+		rep="$REPONSE"
 		if [ -z "$rep" ] || [[ "${MSG[reponses_oui]}" != *"${rep:0:1}"* ]]; then
 			continue
 		fi
