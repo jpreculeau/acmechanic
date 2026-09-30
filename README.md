@@ -85,7 +85,7 @@ Le code de sortie est le **nombre d'étapes en échec** (0 = tout va bien) : pra
 | `ACMECHANIC_PROPOSER=non` | Ne pas proposer de lancer les actions en fin de passage |
 | `ACMECHANIC_SOURIS=non` | Pas de défilement à la molette (garde la sélection de texte à la souris) |
 | `ACMECHANIC_LIGNES_MIN=8` | Lignes de détail minimum par cadre (défaut 6) ; au-delà de l'écran, la grille défile |
-| `ACMECHANIC_THEME=kaiju` | Thème d'affichage (`acmechanic --themes` pour la liste) |
+| `ACMECHANIC_THEME=kaiju` | Thème d'affichage (`acmechanic --themes` pour la liste ; `hasard` : tiré au sort à chaque passage) |
 | `ACMECHANIC_LANGUE=en` | Langue de l'affichage (`fr`, `en`… ; défaut : celle du système, anglais à défaut) |
 | `ACMECHANIC_AUTO_MAJ=signaler` | Prévenir d'une nouvelle version d'Acmechanic sans l'appliquer (`non` : ne rien faire) |
 
@@ -99,7 +99,7 @@ Pour imposer un ordre : `ln -s ../services/a/a.sh ordre.d/10-a.sh` (les services
 
 ## 🌍 Langues
 
-Les textes affichés viennent de catalogues `locale/<langue>.sh` : `fr.sh` (référence) et `en.sh`. La langue suit `ACMECHANIC_LANGUE`, sinon celle du système (`LANG`), et l'anglais s'il n'existe pas de catalogue. **Thèmes** : `acmechanic --themes` montre un aperçu de chacun, `ACMECHANIC_THEME=<thème>` dans `local.conf` l'active. Chaque thème existe en français et en anglais et ne remplace que les textes « fun » (statuts, onomatopées, fin) :
+Les textes affichés viennent de catalogues `locale/<langue>.sh` : `fr.sh` (référence) et `en.sh`. La langue suit `ACMECHANIC_LANGUE`, sinon celle du système (`LANG`), et l'anglais s'il n'existe pas de catalogue. **Thèmes** : `acmechanic --themes` montre un aperçu de chacun, `ACMECHANIC_THEME=<thème>` dans `local.conf` l'active, `ACMECHANIC_THEME=hasard` en tire un au sort à chaque passage (`ACMECHANIC_LANGUE=hasard` fait de même pour la langue). Chaque thème existe en français et en anglais et ne remplace que les textes « fun » (statuts, onomatopées, fin) :
 
 | Thème | Univers | Exemple de fin |
 |---|---|---|

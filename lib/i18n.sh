@@ -14,6 +14,8 @@
 # Themes : locale/themes/<theme>/<langue>.sh remplacent seulement les
 # textes « fun » (statuts, onomatopees, titres, fin). ACMECHANIC_THEME
 # (local.conf) ; sans fichier pour la langue, la version anglaise du theme.
+# ACMECHANIC_THEME=hasard / ACMECHANIC_LANGUE=hasard : tirage au sort a
+# chaque passage.
 #
 # Les textes peuvent contenir des %s / %d (format printf) : t les remplit.
 # Les journaux (log/ok/warn/err) restent en francais : voir ROADMAP.md.
@@ -39,8 +41,39 @@ i18n_langue() {
 
 # i18n_charger : (re)charge les catalogues. Appele au chargement, puis par
 # config.sh une fois local.conf lu (ACMECHANIC_LANGUE peut y etre fixee).
+# _i18n_tirer <variable> <commande> : range dans <variable> une ligne
+# au hasard de la sortie de <commande>.
+_i18n_tirer() {
+	local -n _tirage="$1"
+	local -a l
+	mapfile -t l < <("$2")
+	_tirage="${l[RANDOM % ${#l[@]}]}"
+}
+
+# i18n_langues : codes des langues disponibles, un par ligne.
+i18n_langues() {
+	local f
+	for f in "$_I18N_DOSSIER"/*.sh; do basename "$f" .sh; done
+}
+
+# hasard (ou random, aleatoire) : langue et/ou theme tires au sort UNE fois
+# par passage ; le tirage est exporte, donc identique pour tout le passage
+# (rechargements, services lances par Acmechanic).
+_i18n_hasard() {
+	case "${1:-}" in hasard | random | aleatoire | aléatoire) return 0 ;; esac
+	return 1
+}
+
 i18n_charger() {
 	local l
+	if _i18n_hasard "${ACMECHANIC_LANGUE:-}"; then
+		_i18n_tirer ACMECHANIC_LANGUE i18n_langues
+		export ACMECHANIC_LANGUE
+	fi
+	if _i18n_hasard "${ACMECHANIC_THEME:-}"; then
+		_i18n_tirer ACMECHANIC_THEME i18n_themes
+		export ACMECHANIC_THEME
+	fi
 	l="$(i18n_langue)"
 	MSG=()
 	# shellcheck source=../locale/fr.sh

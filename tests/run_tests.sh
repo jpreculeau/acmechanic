@@ -248,6 +248,12 @@ done
 check "theme applique par-dessus la langue" eq "$(ACMECHANIC_LANGUE=fr ACMECHANIC_THEME=kaiju bash -c 'source "$1/lib/i18n.sh"; echo "${MSG[bruit_maj]}|${MSG[journal]}"' _ "$ROOT")" "RRRAAAWR !|Journal complet : %s"
 check "theme inconnu : sans effet" eq "$(ACMECHANIC_LANGUE=fr ACMECHANIC_THEME=nimporte bash -c 'source "$1/lib/i18n.sh"; t fin_ok' _ "$ROOT")" "Rideau ! Tout est en ordre."
 check "--themes liste les themes" grep -q 'kaiju' <("$ROOT/acmechanic.sh" --themes)
+out="$(for i in $(seq 1 40); do ACMECHANIC_LANGUE=fr ACMECHANIC_THEME=hasard bash -c 'source "$1/lib/i18n.sh"; echo "$ACMECHANIC_THEME"' _ "$ROOT"; done | sort -u)"
+check "theme au hasard : plusieurs themes tires" test "$(wc -l <<<"$out")" -ge 3
+check "theme au hasard : seulement des themes existants" eq "$(grep -vxF -f <(ACMECHANIC_THEME='' bash -c 'source "$1/lib/i18n.sh"; i18n_themes' _ "$ROOT") <<<"$out")" ""
+check "theme au hasard : tirage stable (rechargement)" eq "$(ACMECHANIC_LANGUE=fr ACMECHANIC_THEME=hasard bash -c 'source "$1/lib/i18n.sh"; a=$ACMECHANIC_THEME; i18n_charger; i18n_charger; [ "$a" = "$ACMECHANIC_THEME" ] && echo stable' _ "$ROOT")" "stable"
+out="$(for i in $(seq 1 30); do ACMECHANIC_LANGUE=hasard bash -c 'source "$1/lib/i18n.sh"; echo "$I18N_LANGUE"' _ "$ROOT"; done | sort -u | tr '\n' ' ')"
+check "langue au hasard : fr et en tirees" eq "$out" "en fr "
 
 echo "points d'attention"
 out="$(bash -c '

@@ -69,18 +69,25 @@ case "${1:-}" in
 --aide | --help | -h) afficher_aide; exit 0 ;;
 --themes)
 	# Apercu de chaque theme dans la langue choisie (local.conf lu).
+	brut="${ACMECHANIC_THEME:-}" # avant tout tirage au sort
 	# shellcheck source=lib/i18n.sh
 	source "${ACMECHANIC_HOME}/lib/i18n.sh"
 	# shellcheck source=config.sh
 	source "${ACMECHANIC_HOME}/config.sh"
 	actif="${ACMECHANIC_THEME:-acme}"
+	# Avec « hasard », config.sh vient de tirer un theme : on montre le reglage.
+	if _i18n_hasard "$brut" || grep -qE '^[[:space:]]*ACMECHANIC_THEME=(hasard|random|aleatoire)' "$ACMECHANIC_HOME/local.conf" 2>/dev/null; then
+		actif=hasard
+	fi
 	while read -r theme; do
 		ACMECHANIC_THEME="$theme" i18n_charger
 		printf '%s %-10s %s\n  %12s%s  ·  %s\n' "$([ "$theme" = "$actif" ] && echo '*' || echo ' ')" \
 			"$theme" "${MSG[sous_titre]}" "" "${MSG[bruit_maj]}" "${MSG[fin_ok]}"
 	done < <(i18n_themes)
 	echo
-	echo "ACMECHANIC_THEME=<theme> dans local.conf (langue : $(i18n_langue))"
+	printf '%s hasard     un theme tire au sort a chaque passage\n' "$([ "$actif" = hasard ] && echo '*' || echo ' ')"
+	echo
+	echo "ACMECHANIC_THEME=<theme|hasard> dans local.conf (langue : $(i18n_langue) ; ACMECHANIC_LANGUE=hasard possible)"
 	exit 0
 	;;
 esac

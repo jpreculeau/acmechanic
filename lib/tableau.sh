@@ -680,6 +680,7 @@ tableau_fin() {
 		for i in 2 1 0; do printf '%s)' "${_T_ARC[i]}"; done
 		printf '%s\n' "$_T_RAZ"
 	else
+		# shellcheck disable=SC2153 # ACMECHANIC_HOME : pose par acmechanic.sh
 		printf ' %s%s %s%s  %s(%s)%s\n' "$_T_GRAS$_T_ROUGE" "${_ICONE_STATUT[ECHEC]}" \
 			"$(t fin_echec "$code")" "$_T_RAZ" "$_T_TERNE" "$(t restauration "$ACMECHANIC_HOME/restore.sh")" "$_T_RAZ"
 	fi
