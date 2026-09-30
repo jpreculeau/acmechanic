@@ -238,6 +238,8 @@ check "langue sans catalogue : anglais" eq "$(ACMECHANIC_LANGUE=de bash -c 'sour
 echo "themes (locale/themes)"
 for d in "$ROOT"/locale/themes/*/; do
 	th="$(basename "$d")"
+	n="$(bash -c 'source "$1/style.sh"; echo "${#THEME_ARC[@]}/${#THEME_ICONE}"' _ "$d" 2>/dev/null)"
+	check "theme $th : style (10 couleurs, une icone)" eq "$n" "10/1"
 	for c in fr en; do
 		check "theme $th : $c.sh present" test -r "$d/$c.sh"
 		extra="$(comm -23 <(cles "$d/$c.sh") <(cles "$ROOT/locale/fr.sh"))"
@@ -245,9 +247,9 @@ for d in "$ROOT"/locale/themes/*/; do
 		check "theme $th/$c : %d garde dans fin_echec" grep -q 'fin_echec\]=".*%d' "$d/$c.sh"
 	done
 done
-check "theme applique par-dessus la langue" eq "$(ACMECHANIC_LANGUE=fr ACMECHANIC_THEME=kaiju bash -c 'source "$1/lib/i18n.sh"; echo "${MSG[bruit_maj]}|${MSG[journal]}"' _ "$ROOT")" "RRRAAAWR !|Journal complet : %s"
+check "theme applique par-dessus la langue" eq "$(ACMECHANIC_LANGUE=fr ACMECHANIC_THEME=godzilla bash -c 'source "$1/lib/i18n.sh"; echo "${MSG[bruit_maj]}|${MSG[journal]}|${#THEME_ARC[@]}"' _ "$ROOT")" "Souffle atomique !|Journal complet : %s|10"
 check "theme inconnu : sans effet" eq "$(ACMECHANIC_LANGUE=fr ACMECHANIC_THEME=nimporte bash -c 'source "$1/lib/i18n.sh"; t fin_ok' _ "$ROOT")" "Rideau ! Tout est en ordre."
-check "--themes liste les themes" grep -q 'kaiju' <("$ROOT/acmechanic.sh" --themes)
+check "--themes liste les themes" grep -q 'enterprise' <("$ROOT/acmechanic.sh" --themes)
 out="$(for i in $(seq 1 40); do ACMECHANIC_LANGUE=fr ACMECHANIC_THEME=hasard bash -c 'source "$1/lib/i18n.sh"; echo "$ACMECHANIC_THEME"' _ "$ROOT"; done | sort -u)"
 check "theme au hasard : plusieurs themes tires" test "$(wc -l <<<"$out")" -ge 3
 check "theme au hasard : seulement des themes existants" eq "$(grep -vxF -f <(ACMECHANIC_THEME='' bash -c 'source "$1/lib/i18n.sh"; i18n_themes' _ "$ROOT") <<<"$out")" ""

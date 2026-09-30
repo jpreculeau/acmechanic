@@ -81,8 +81,12 @@ case "${1:-}" in
 	fi
 	while read -r theme; do
 		ACMECHANIC_THEME="$theme" i18n_charger
-		printf '%s %-10s %s\n  %12s%s  ·  %s\n' "$([ "$theme" = "$actif" ] && echo '*' || echo ' ')" \
-			"$theme" "${MSG[sous_titre]}" "" "${MSG[bruit_maj]}" "${MSG[fin_ok]}"
+		coul="${THEME_TITRE:-$'\033[95m'}" echantillon=""
+		for c in "${THEME_ARC[@]}"; do echantillon+="$c█"; done
+		printf '%s %s%-10s\033[0m %s\033[0m %s\n  %12s%s  ·  %s\n' \
+			"$([ "$theme" = "$actif" ] && echo '*' || echo ' ')" "$coul" "$theme" \
+			"${echantillon:-$'\033[95m█\033[96m█\033[93m█\033[92m█\033[94m█\033[91m█'}" \
+			"${MSG[sous_titre]}" "" "${MSG[bruit_maj]}" "${MSG[fin_ok]}"
 	done < <(i18n_themes)
 	echo
 	printf '%s hasard     un theme tire au sort a chaque passage\n' "$([ "$actif" = hasard ] && echo '*' || echo ' ')"

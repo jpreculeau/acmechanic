@@ -86,6 +86,11 @@ _T_CYAN=$'\033[96m' _T_MAGENTA=$'\033[95m'
 # pour la barre d'avancement.
 _T_ARC=($'\033[95m' $'\033[96m' $'\033[93m' $'\033[92m' $'\033[94m' $'\033[91m'
 	$'\033[35m' $'\033[36m' $'\033[33m' $'\033[32m')
+# Theme (locale/themes/<theme>/style.sh) : ses couleurs remplacent
+# l'arc-en-ciel (cadres au travail, barre, fin), et sa couleur et son
+# icone habillent la pastille titre.
+if [ "${#THEME_ARC[@]}" -gt 0 ] 2>/dev/null; then _T_ARC=("${THEME_ARC[@]}"); fi
+_T_TITRE="${THEME_TITRE:-$_T_MAGENTA}"
 
 # Onomatopees de dessin anime, pour le seul plaisir des yeux : le bas de
 # chaque cadre en affiche une selon l'etat du service.
@@ -399,6 +404,7 @@ _tableau_cadre() {
 # La disposition ne depend que du NOMBRE de services et de la taille de
 # la fenetre : l'image a toujours la meme hauteur, rien ne saute.
 _tableau_dessiner() {
+	shopt -s extglob # motifs de suppression des sequences ANSI
 	local d="$TABLEAU_DOSSIER" rows cols n=${#TABLEAU_LIGNES[@]} nom i j r
 	local finis=0 en_cours=0 maj=0 echecs=0 statut image ligne precedente
 	local largeur_barre=24 pleins barre hauteur k
@@ -441,15 +447,28 @@ _tableau_dessiner() {
 	done
 	barre+="$_T_RAZ"
 	_tableau_duree "$((EPOCHSECONDS - ${TABLEAU_DEBUT:-$EPOCHSECONDS}))"
-	ligne=" ${_T_GRAS}${_T_INV}${_T_MAGENTA} ${_ICONE_STATUT[TITRE]} ACMECHANIC ${_T_RAZ}"
+	# En-tete sur UNE ligne : le sous-titre (textes des themes, parfois
+	# longs) est raccourci a la place restante, sinon la ligne deborderait
+	# et decalerait tout l'affichage.
+	local debut_l fin_l brut place st
+	debut_l=" ${_T_GRAS}${_T_INV}${_T_TITRE} ${THEME_ICONE:-${_ICONE_STATUT[TITRE]}} ACMECHANIC ${_T_RAZ}"
+	fin_l="  ${_T_CYAN}${_ICONE_STATUT[MACHINE]} ${HOSTNAME:-}${_T_RAZ}"
+	fin_l+="  ${barre} ${_T_GRAS}${finis}/${n}${_T_RAZ}"
+	[ "$maj" -gt 0 ] && fin_l+="  ${_T_VERT}${_ICONE_STATUT[MAJ]} ${maj}${_T_RAZ}"
+	[ "$echecs" -gt 0 ] && fin_l+="  ${_T_ROUGE}${_ICONE_STATUT[ECHEC]} ${echecs}${_T_RAZ}"
+	fin_l+="  ${_T_TERNE}${_ICONE_STATUT[HORLOGE]} ${_DUREE}${_T_RAZ}"
+	brut="${debut_l}${fin_l}"
+	brut="${brut//$'\e'\[*([0-9;?])[a-zA-Z]/}"
 	# Etoiles : icone Font Awesome (U+F005) ; « ★ » Unicode n'existe pas
-	# dans JetBrainsMono Nerd Font (carre vide a l'ecran).
-	[ "$cols" -ge 120 ] && ligne+=" ${_T_ITAL}${_T_JAUNE}${_ICONE_STATUT[ETOILE]} ${MSG[sous_titre]} ${_ICONE_STATUT[ETOILE]}${_T_RAZ}"
-	ligne+="  ${_T_CYAN}${_ICONE_STATUT[MACHINE]} ${HOSTNAME:-}${_T_RAZ}"
-	ligne+="  ${barre} ${_T_GRAS}${finis}/${n}${_T_RAZ}"
-	[ "$maj" -gt 0 ] && ligne+="  ${_T_VERT}${_ICONE_STATUT[MAJ]} ${maj}${_T_RAZ}"
-	[ "$echecs" -gt 0 ] && ligne+="  ${_T_ROUGE}${_ICONE_STATUT[ECHEC]} ${echecs}${_T_RAZ}"
-	ligne+="  ${_T_TERNE}${_ICONE_STATUT[HORLOGE]} ${_DUREE}${_T_RAZ}"
+	# dans JetBrainsMono Nerd Font (carre vide a l'ecran). 6 = etoiles + espaces.
+	place=$((cols - 1 - ${#brut} - 6))
+	st="${MSG[sous_titre]}"
+	if [ "$place" -ge 12 ]; then
+		[ "${#st}" -gt "$place" ] && st="${st:0:$((place - 1))}…"
+		ligne="${debut_l} ${_T_ITAL}${_T_JAUNE}${_ICONE_STATUT[ETOILE]} ${st} ${_ICONE_STATUT[ETOILE]}${_T_RAZ}${fin_l}"
+	else
+		ligne="${debut_l}${fin_l}"
+	fi
 	image+=$'\033[2K'"$ligne"$'\n\033[2K\n'
 	hauteur=2
 

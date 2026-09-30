@@ -12,7 +12,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 - `etape` (lib/service.sh) : comme `run_etape`, mais renvoie 1 en cas d'échec.
 - `ROADMAP.md` : 1.5 multi-distributions (dnf, pacman, zypper, apk).
 - `ACMECHANIC_THEME=hasard` et `ACMECHANIC_LANGUE=hasard` : thème / langue tirés au sort à chaque passage (tirage stable pendant le passage).
-- Thèmes d'affichage en français et en anglais : `droides`, `kaiju`, `matrice`, `cyborg`, `delorean`, `vaisseau` (`ACMECHANIC_THEME`, aperçu : `acmechanic --themes`).
+- Thèmes d'affichage en français et en anglais : `starwars`, `godzilla`, `matrix`, `terminator`, `delorean`, `enterprise` — répliques des films (VF et VO), couleurs et icône propres (`locale/themes/<thème>/style.sh`) ; `ACMECHANIC_THEME`, aperçu : `acmechanic --themes`.
 - Langues : catalogues `locale/fr.sh` et `locale/en.sh`, `ACMECHANIC_LANGUE`, autres langues par simple catalogue (test de complétude).
 - Points d'attention : `point_attention "message" "commande"` pour tout service, regroupés en fin de passage (redémarrage requis, micrologiciel, auto-mise à jour non appliquée…).
 - `bureau` : gestionnaire de fenêtres et barre de menu (ex. nwg-panel installé depuis git avec des correctifs locaux : fusion des branches, `git rerere`, retour arrière, relance proposée).

@@ -85,7 +85,7 @@ Le code de sortie est le **nombre d'étapes en échec** (0 = tout va bien) : pra
 | `ACMECHANIC_PROPOSER=non` | Ne pas proposer de lancer les actions en fin de passage |
 | `ACMECHANIC_SOURIS=non` | Pas de défilement à la molette (garde la sélection de texte à la souris) |
 | `ACMECHANIC_LIGNES_MIN=8` | Lignes de détail minimum par cadre (défaut 6) ; au-delà de l'écran, la grille défile |
-| `ACMECHANIC_THEME=kaiju` | Thème d'affichage (`acmechanic --themes` pour la liste ; `hasard` : tiré au sort à chaque passage) |
+| `ACMECHANIC_THEME=godzilla` | Thème d'affichage (`acmechanic --themes` pour la liste ; `hasard` : tiré au sort à chaque passage) |
 | `ACMECHANIC_LANGUE=en` | Langue de l'affichage (`fr`, `en`… ; défaut : celle du système, anglais à défaut) |
 | `ACMECHANIC_AUTO_MAJ=signaler` | Prévenir d'une nouvelle version d'Acmechanic sans l'appliquer (`non` : ne rien faire) |
 
@@ -101,17 +101,17 @@ Pour imposer un ordre : `ln -s ../services/a/a.sh ordre.d/10-a.sh` (les services
 
 Les textes affichés viennent de catalogues `locale/<langue>.sh` : `fr.sh` (référence) et `en.sh`. La langue suit `ACMECHANIC_LANGUE`, sinon celle du système (`LANG`), et l'anglais s'il n'existe pas de catalogue. **Thèmes** : `acmechanic --themes` montre un aperçu de chacun, `ACMECHANIC_THEME=<thème>` dans `local.conf` l'active, `ACMECHANIC_THEME=hasard` en tire un au sort à chaque passage (`ACMECHANIC_LANGUE=hasard` fait de même pour la langue). Chaque thème existe en français et en anglais et ne remplace que les textes « fun » (statuts, onomatopées, fin) :
 
-| Thème | Univers | Exemple de fin |
+| Thème | Univers | Exemple de fin (VF) |
 |---|---|---|
 | `acme` *(défaut)* | dessin animé | Rideau ! Tout est en ordre. |
-| `droides` | droïdes de protocole et d'astromécanique | Bip-bouip ! Les droïdes ont tout réparé. |
-| `kaiju` | monstre géant sorti de l'océan | Le monstre retourne à l'océan. Tokyo est sauvée. |
-| `matrice` | réalité simulée, code vert | Vous êtes libéré. Tout est en ordre. |
-| `cyborg` | cyborg venu du futur | Mission accomplie. Je reviendrai. |
-| `delorean` | voiture à remonter le temps | Des mises à jour ? Là où on va, on n'en a pas besoin. |
-| `vaisseau` | vaisseau d'exploration spatiale | Journal de bord : tous les systèmes sont opérationnels. |
+| `starwars` | Star Wars — R2-D2 et C-3PO | Que la Force soit avec toi. Tout est en ordre. |
+| `godzilla` | Godzilla, le Roi des Monstres | Le Roi des Monstres retourne à l'océan. Tokyo est sauvée. |
+| `matrix` | Matrix | Bienvenue dans le monde réel. Tout est en ordre. |
+| `terminator` | Terminator — T-800, Skynet | Hasta la vista, baby. Mission accomplie. |
+| `delorean` | Retour vers le futur | Des routes ? Là où on va, on n'a pas besoin de routes. |
+| `enterprise` | Star Trek — USS Enterprise | Longue vie et prospérité. Tous les systèmes sont opérationnels. |
 
-Les thèmes sont des clins d'œil de fans, sans lien avec les ayants droit des univers évoqués. Nouveau thème : un dossier `locale/themes/<nom>/` avec `fr.sh` et `en.sh` (voir un thème existant) ; `make test` vérifie les clés.
+Chaque thème a aussi ses couleurs (cadres, barre, pastille titre) et une icône de la police Nerd Font. Les thèmes sont des hommages de fans : les noms, répliques et marques citées appartiennent à leurs ayants droit (Lucasfilm / Disney, Toho, Warner Bros., Universal / Amblin, Paramount / CBS Studios…) ; courtes citations, sans affiliation ni approbation. Nouveau thème : un dossier `locale/themes/<nom>/` avec `fr.sh` et `en.sh` (voir un thème existant) ; `make test` vérifie les clés.
 
 **Ajouter une langue** : copier `locale/en.sh` en `locale/<code>.sh`, traduire, `make test` vérifie qu'aucune clé ne manque. Les messages du journal restent en français pour l'instant (voir la [feuille de route](ROADMAP.md)).
 

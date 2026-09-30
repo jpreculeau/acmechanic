@@ -30,7 +30,7 @@
 # --- Affichage ---
 # ACMECHANIC_LANGUE=fr               # fr, en... (défaut : langue du système)
 # ACMECHANIC_LIGNES_MIN=6           # lignes minimum par cadre (ascenseur au-delà de l'écran)
-# ACMECHANIC_THEME=kaiju             # acme (défaut), droides, kaiju, matrice, cyborg, delorean, vaisseau, hasard
+# ACMECHANIC_THEME=godzilla             # acme (défaut), starwars, godzilla, matrix, terminator, delorean, enterprise, hasard
 # declare -A ICONES_SERVICES=([mon-app]=$'\xef\x80\x95')   # icône Nerd Font d'un cadre
 
 # --- Maintenance de la machine ---

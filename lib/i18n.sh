@@ -81,9 +81,11 @@ i18n_charger() {
 	# shellcheck source=/dev/null
 	[ "$l" != fr ] && source "$_I18N_DOSSIER/$l.sh"
 	I18N_LANGUE="$l"
-	# Theme (facultatif) par-dessus la langue.
+	# Theme (facultatif) par-dessus la langue ; son style (couleurs, icone)
+	# est lu par lib/tableau.sh.
 	local th="${ACMECHANIC_THEME:-}" d
-	I18N_THEME=""
+	I18N_THEME="" THEME_ICONE="" THEME_TITRE=""
+	THEME_ARC=()
 	case "$th" in "" | acme) return 0 ;; esac
 	d="$_I18N_DOSSIER/themes/$th"
 	if [ -r "$d/$l.sh" ]; then
@@ -95,6 +97,8 @@ i18n_charger() {
 	else
 		return 0
 	fi
+	# shellcheck source=/dev/null
+	[ -r "$d/style.sh" ] && source "$d/style.sh"
 	I18N_THEME="$th"
 }
 
