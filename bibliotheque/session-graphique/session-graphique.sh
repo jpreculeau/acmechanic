@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# bureau.sh - Gestionnaire de fenetres et barre de menu.
+# session-graphique.sh - Session graphique : gestionnaire de fenetres et barre.
 #
 #   Gestionnaire de fenetres (Hyprland, Sway, labwc, Wayfire, niri) :
 #     installe par paquet -> mis a jour avec le systeme, version relevee ;
 #     compile a la main (/usr/local) -> signale ; greffons Hyprland
 #     (hyprpm) mis a jour s'il y en a.
 #   Barre / outils installes par pip DEPUIS UN DEPOT GIT, avec vos
-#   correctifs (branches) : BUREAU_PIP_GIT=(nwg-panel ...). Pour chacun :
+#   correctifs (branches) : SESSION_GRAPHIQUE_PIP_GIT=(nwg-panel ...). Pour chacun :
 #     1. derniere etiquette de l'amont (ou <NOM>_REF) ;
 #     2. fusion de vos branches <NOM>_CORRECTIFS dans un dossier jetable
 #        (git worktree) ; un conflit deja resolu une fois est rejoue par
@@ -16,13 +16,13 @@
 #     4. la barre en cours tourne encore l'ancienne version : sa relance
 #        est proposee (points d'attention / actions proposees).
 #
-# Installation : ln -s "$PWD/bibliotheque/bureau" services/bureau
+# Installation : ln -s "$PWD/bibliotheque/session-graphique" services/session-graphique
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 set -uo pipefail
 
-SERVICE_NAME="bureau"
+SERVICE_NAME="session-graphique"
 : "${ACMECHANIC_HOME:=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)}"
 # shellcheck source=../../lib/service.sh
 source "${ACMECHANIC_HOME}/lib/service.sh"
@@ -32,12 +32,15 @@ source "${ACMECHANIC_HOME}/lib/service.sh"
 #   <NOM>_SRC         clone git (remote « origin » = amont), obligatoire
 #   <NOM>_CORRECTIFS  branches locales a fusionner (vos correctifs), tableau
 #   <NOM>_REF         etiquette ou branche visee (defaut : derniere etiquette)
-if [[ -z "${BUREAU_PIP_GIT+x}" ]]; then BUREAU_PIP_GIT=(); fi
-: "${BUREAU_ETAT:=${XDG_STATE_HOME:-$HOME/.local/state}/acmechanic}"
+# Anciens noms (service « bureau » jusqu'en 1.1.x) : encore acceptes.
+if [[ -z "${SESSION_GRAPHIQUE_PIP_GIT+x}" ]]; then
+	if [[ -n "${BUREAU_PIP_GIT+x}" ]]; then SESSION_GRAPHIQUE_PIP_GIT=("${BUREAU_PIP_GIT[@]}"); else SESSION_GRAPHIQUE_PIP_GIT=(); fi
+fi
+: "${SESSION_GRAPHIQUE_ETAT:=${BUREAU_ETAT:-${XDG_STATE_HOME:-$HOME/.local/state}/acmechanic}}"
 # -------------------------------------------------------------------------------
 
-titre "BUREAU : GESTIONNAIRE DE FENETRES ET BARRE"
-mkdir -p "$BUREAU_ETAT"
+titre "SESSION GRAPHIQUE : GESTIONNAIRE DE FENETRES ET BARRE"
+mkdir -p "$SESSION_GRAPHIQUE_ETAT"
 
 # --- 1. Gestionnaire de fenetres -----------------------------------------------
 # processus:paquet:commande
@@ -109,7 +112,7 @@ maj_pip_git() {
 	for b in "${correctifs[@]}"; do
 		empreinte+=" $(git -C "$src" rev-parse "$b" 2>/dev/null || echo "?$b")"
 	done
-	ancienne="$(cat "$BUREAU_ETAT/$nom.empreinte" 2>/dev/null)"
+	ancienne="$(cat "$SESSION_GRAPHIQUE_ETAT/$nom.empreinte" 2>/dev/null)"
 	avant="$(version_pip "$nom")"
 	if [ "$empreinte" = "$ancienne" ]; then
 		inchanger_etape "$nom" "a jour ($ref + ${#correctifs[@]} correctif(s))"
@@ -141,14 +144,14 @@ maj_pip_git() {
 
 	# Copie de securite de l'installation actuelle, pour le retour arriere.
 	site="$(python3 -c 'import site; print(site.getusersitepackages())')"
-	sauvegarde="$BUREAU_ETAT/$nom-avant.tar.gz"
+	sauvegarde="$SESSION_GRAPHIQUE_ETAT/$nom-avant.tar.gz"
 	(cd "$site" && tar czf "$sauvegarde" "$mod" "$mod"-*.dist-info) 2>/dev/null
 
 	if etape "$nom : installation ($ref + ${#correctifs[@]} correctif(s))" 900 \
 		python3 -m pip install --user --break-system-packages --no-deps --force-reinstall \
 		--quiet "$arbre" && python3 -c "import $mod" 2>/dev/null; then
 		apres="$(version_pip "$nom")"
-		echo "$empreinte" >"$BUREAU_ETAT/$nom.empreinte"
+		echo "$empreinte" >"$SESSION_GRAPHIQUE_ETAT/$nom.empreinte"
 		NB_MAJ=$((NB_MAJ + 1))
 		enregistrer_version "$nom" "$avant" "$apres"
 		relance_proposee "$nom"
@@ -160,9 +163,9 @@ maj_pip_git() {
 	git -C "$src" worktree remove --force "$arbre"
 }
 
-for nom in "${BUREAU_PIP_GIT[@]}"; do
+for nom in "${SESSION_GRAPHIQUE_PIP_GIT[@]}"; do
 	maj_pip_git "$nom"
 done
 
-bilan_service "Bilan du bureau"
+bilan_service "Bilan de la session graphique"
 exit $?

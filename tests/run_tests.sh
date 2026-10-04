@@ -153,7 +153,7 @@ echo 1.0.0 >"$O/ov"
 PATH="$O:$PATH" IA_OUTILS=ollama "$ROOT/bibliotheque/outils-ia/outils-ia.sh" >/dev/null 2>&1
 check "ollama : OLLAMA_MAJ par defaut = signaler seulement" eq "$(cat "$O/ov")" "1.0.0"
 
-echo "bureau (depot git + correctifs)"
+echo "session-graphique (depot git + correctifs)"
 N="$TMP/nwg"; mkdir -p "$N"
 nouveau_depot demo-outil
 git -C "$G/demo-outil.src" tag v1.0
@@ -162,16 +162,19 @@ git -C "$G/demo-outil.src" tag v1.0
 git -C "$G/demo-outil.src" push -q origin correctif-a correctif-b --tags
 git -C "$G/demo-outil" fetch -q origin 'refs/heads/correctif-*:refs/heads/correctif-*' --tags
 cat >"$N/local.conf" <<EOS
-BUREAU_PIP_GIT=(demo-outil)
+SESSION_GRAPHIQUE_PIP_GIT=(demo-outil)
 DEMO_OUTIL_SRC="$G/demo-outil"
 DEMO_OUTIL_CORRECTIFS=(correctif-a correctif-b)
 EOS
-cp -r "$ROOT/lib" "$ROOT/config.sh" "$ROOT/locale" "$N/"; mkdir -p "$N/bibliotheque"; cp -r "$ROOT/bibliotheque/bureau" "$N/bibliotheque/"
-env -u ACMECHANIC_HOME BUREAU_ETAT="$N/etat" "$N/bibliotheque/bureau/bureau.sh" >/dev/null 2>&1; rc=$?
-out="$(cat "$LOG_DIR/bureau.log")"
-check "bureau : code 0" eq "$rc" "0"
-check "bureau : conflit de correctifs => point d'attention, rien d'installe" grep -q "correctif-b ne s'applique plus sur v1.0" <<<"$out"
-check "bureau : dossier jetable supprime" eq "$(git -C "$G/demo-outil" worktree list | wc -l)" "1"
+cp -r "$ROOT/lib" "$ROOT/config.sh" "$ROOT/locale" "$N/"; mkdir -p "$N/bibliotheque"; cp -r "$ROOT/bibliotheque/session-graphique" "$N/bibliotheque/"
+env -u ACMECHANIC_HOME SESSION_GRAPHIQUE_ETAT="$N/etat" "$N/bibliotheque/session-graphique/session-graphique.sh" >/dev/null 2>&1; rc=$?
+out="$(cat "$LOG_DIR/session-graphique.log")"
+check "session-graphique : code 0" eq "$rc" "0"
+check "session-graphique : conflit de correctifs => point d'attention, rien d'installe" grep -q "correctif-b ne s'applique plus sur v1.0" <<<"$out"
+check "session-graphique : dossier jetable supprime" eq "$(git -C "$G/demo-outil" worktree list | wc -l)" "1"
+sed -i 's/^SESSION_GRAPHIQUE_PIP_GIT=/BUREAU_PIP_GIT=/' "$N/local.conf"; : >"$LOG_DIR/session-graphique.log"
+env -u ACMECHANIC_HOME SESSION_GRAPHIQUE_ETAT="$N/etat" "$N/bibliotheque/session-graphique/session-graphique.sh" >/dev/null 2>&1
+check "session-graphique : ancien reglage BUREAU_PIP_GIT encore lu" grep -q "correctif-b ne s'applique plus sur v1.0" "$LOG_DIR/session-graphique.log"
 
 echo "configuration"
 mkdir -p "$TMP/home"
