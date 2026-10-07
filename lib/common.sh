@@ -54,8 +54,9 @@ _maintenance_interrompre() {
 }
 
 # Filet de securite contre un fige total. Doit rester SUPERIEUR au pire
-# cumul d'un service : pull 1200 + arret 120 + sauvegarde 600 +
-# redemarrage 180 + verification 90 + nettoyage 300 = ~2490 s.
+# cumul d'un service, attentes du verrou des images comprises (voir
+# config.sh) : pull 1320 + arret 120 + sauvegarde 600 + redemarrage 300
+# + verifications 270 + nettoyage 360 = ~2970 s.
 SEUIL_FIGE="${SEUIL_FIGE:-3600}"   # 1 h
 
 # Delai accorde a un `compose pull`. 120 s etait irrealiste : une image
@@ -1210,12 +1211,123 @@ config_a_jour() {
 	[ -z "$h_conteneur" ] || [ "$h_compose" = "$h_conteneur" ]
 }
 
-# nettoyer_images : `docker image prune` SERIALISE entre services.
-# Acmechanic lance les services en parallele ; deux prune simultanes font
-# repondre au second « a prune operation is already running » (erreur
-# 409) et l'etape passait en ECHEC a tort.
+# --- Verrou du magasin d'images : pulls (partage) / prune (exclusif) ---
+# Avec le magasin d'images containerd (defaut des installations neuves
+# de Docker 29), `docker image prune` commence par SUPPRIMER TOUS les
+# baux (leases) de pull, y compris ceux des pulls EN COURS, qui echouent
+# alors (« lease does not exist », « content digest not found », « commit
+# failed: rename .../ingest »). Acmechanic lance les services en
+# parallele : le 07/10/2026, un prune a tue trois pulls d'un coup.
+# Les pulls et les `up` (qui peuvent tirer une image manquante) prennent
+# donc le verrou en PARTAGE (ils restent paralleles entre eux) et les
+# prune en EXCLUSIF. Un pull ou un `up` n'attend que les prune en cours
+# (en general quelques secondes) ; un prune attend qu'aucun pull ne
+# tourne, sinon il est reporte. L'exclusif serialise aussi les prune
+# entre eux (sinon « a prune operation is already running », erreur
+# 409). Seuls les pulls lances par Acmechanic sont proteges. Le fichier
+# garde son ancien nom : un `flock <fichier> docker image prune` externe
+# (exclusif par defaut) reste compatible.
+# Delais lus a l'appel (local.conf est charge apres ce fichier) :
+#   DELAI_VERROU_PARTAGE : attente d'un pull/up (defaut 120 s) ;
+#   DELAI_VERROU_EXCLUSIF : attente du prune de nettoyage (defaut
+#   DELAI_PULL) ; le prune qui suit la mise a jour d'un service n'attend
+#   que ATTENTE_PRUNE_SERVICE (60 s, interne : surcharge pour les tests),
+#   pour que le service reste sous DELAI_SERVICE (config.sh) : le
+#   nettoyage, lui, peut attendre.
+DELAI_VERROU_PARTAGE="${DELAI_VERROU_PARTAGE:-120}"
+ATTENTE_PRUNE_SERVICE="${ATTENTE_PRUNE_SERVICE:-60}"
+VERROU_NON_OBTENU=75   # EX_TEMPFAIL
+
+# _attente_prune : attente maximale du verrou par un prune.
+_attente_prune() {
+	echo "${DELAI_VERROU_EXCLUSIF:-$DELAI_PULL}"
+}
+
+# Delais des etapes, attente du verrou comprise.
+delai_etape_pull() {
+	echo $((DELAI_VERROU_PARTAGE + DELAI_PULL))
+}
+delai_etape_up() {
+	echo $((DELAI_VERROU_PARTAGE + 180))
+}
+# delai_etape_prune [attente_s] (defaut : attente du prune de nettoyage)
+delai_etape_prune() {
+	echo $((${1:-$(_attente_prune)} + 300))
+}
+
+# avec_verrou_images <partage|exclusif> <commande...>
+# Sous-shell + descripteur 8 (le 9 est celui de prendre_verrou) : la
+# commande peut etre une fonction bash (ex. compose), ce que `flock
+# <fichier> <commande>` ne sait pas lancer. Ouverture en lecture seule,
+# sans O_CREAT si le fichier existe (il peut appartenir a un autre
+# compte) ; illisible ou impossible a creer, il vaut « verrou non
+# obtenu ». 8>&- : les programmes lances n'heritent pas du verrou (un
+# processus laisse derriere eux ne le retiendrait pas).
+# Code VERROU_NON_OBTENU si le verrou n'est pas obtenu a temps.
+avec_verrou_images() {
+	local mode delai nom="${1:-}" fichier="${VERROU_DIR:-/tmp}/maintenance-docker-prune.lock"
+	case "$nom" in
+	partage) mode=-s delai="$DELAI_VERROU_PARTAGE" ;;
+	exclusif) mode=-x delai="$(_attente_prune)" ;;
+	*)
+		echo "avec_verrou_images : mode « $nom » invalide (partage|exclusif)" >&2
+		return 2 ;;
+	esac
+	shift
+	[ -e "$fichier" ] || : >>"$fichier"
+	[ -r "$fichier" ] || {
+		echo "Verrou des images Docker impossible a creer ou illisible ($fichier)" >&2
+		return "$VERROU_NON_OBTENU"
+	}
+	(
+		if ! flock -n "$mode" 8; then
+			echo "En attente du verrou des images Docker ($nom, ${delai}s au plus)..." >&2
+			flock "$mode" -w "$delai" 8 || {
+				echo "Verrou des images Docker non obtenu en ${delai}s ($fichier)" >&2
+				exit "$VERROU_NON_OBTENU"
+			}
+		fi
+		"$@" 8>&-
+	) 8<"$fichier"
+}
+
+# tirer_service <projet> <service> : pull sous verrou partage.
+tirer_service() {
+	avec_verrou_images partage compose "$1" pull "$2"
+}
+
+# redemarrer_service <projet> <service...> : `up` apres un arret, jamais
+# abandonne faute de verrou (des prune peuvent s'enchainer) : au-dela de
+# DELAI_VERROU_PARTAGE, on relance sans verrou. Seul un pull implicite
+# (image manquante) resterait alors expose a un prune, contre un service
+# coupe faute de verrou jusqu'au passage suivant sinon.
+redemarrer_service() {
+	local projet="$1" rc=0
+	shift
+	avec_verrou_images partage compose "$projet" up -d --remove-orphans "$@" || rc=$?
+	[ "$rc" -eq "$VERROU_NON_OBTENU" ] || return "$rc"
+	warn "$* : verrou des images non obtenu, redemarrage sans verrou."
+	compose "$projet" up -d --remove-orphans "$@"
+}
+
+# image_locale <image:tag> : vrai si l'image est presente en local.
+image_locale() {
+	docker image inspect "$1" >/dev/null 2>&1
+}
+
+# nettoyer_images [attente_s] : prune opportuniste. Si des pulls tournent
+# encore au bout de l'attente (defaut : celle du prune de nettoyage), ou
+# si le verrou est inutilisable, il est reporte (le passage suivant le
+# fera) : ce n'est pas un echec.
 nettoyer_images() {
-	flock -w 300 /tmp/maintenance-docker-prune.lock docker image prune -f
+	local rc=0
+	DELAI_VERROU_EXCLUSIF="${1:-$(_attente_prune)}" \
+		avec_verrou_images exclusif docker image prune -f || rc=$?
+	if [ "$rc" -eq "$VERROU_NON_OBTENU" ]; then
+		warn "Nettoyage des images reporte : verrou des images non obtenu (pulls en cours ?)."
+		return 0
+	fi
+	return "$rc"
 }
 
 maintenir_service_docker() {
@@ -1259,7 +1371,8 @@ maintenir_service_docker() {
 		else
 			warn "$service : sonde de sante en echec (unhealthy), recreation."
 		fi
-		run_etape "$service : recreation" 180 compose "$projet" up -d --force-recreate "$service"
+		run_etape "$service : recreation" "$(delai_etape_up)" \
+			avec_verrou_images partage compose "$projet" up -d --force-recreate "$service"
 		run_etape "$service : verification de la sante" 180 attendre_sante "$service" 170
 		NB_MAJ=$((NB_MAJ + 1))
 		enregistrer_version "$service" "$ver_avant" "$ver_avant"
@@ -1269,15 +1382,21 @@ maintenir_service_docker() {
 	if [ "$actif" != true ]; then
 		warn "$service : conteneur arrete ou absent, il sera (re)cree."
 	elif [ "$a_jour" != true ]; then
-		warn "$service : le conteneur tourne une image plus ancienne que l'image locale, recreation."
+		if image_locale "$image"; then
+			warn "$service : le conteneur tourne une image plus ancienne que l'image locale, recreation."
+		else
+			warn "$service : $image absente en local, pull puis recreation si elle est obtenue."
+		fi
 	fi
 
 	if [ -n "$d_registre" ] && [ -z "$d_avant" ] && [ "$ver_avant" = "?" ]; then
 		# Conteneur absent (image jamais tiree) : pull + creation sans
 		# sauvegarde (rien a proteger : pas de version precedente, les
 		# volumes de config persistent de toute facon).
-		run_etape "$service : pull de l'image" "$DELAI_PULL" compose "$projet" pull "$service"
-		run_etape "$service : redemarrage" 180 compose "$projet" up -d --remove-orphans "$service"
+		run_etape "$service : pull de l'image" "$(delai_etape_pull)" \
+			tirer_service "$projet" "$service"
+		run_etape "$service : redemarrage" "$(delai_etape_up)" \
+			redemarrer_service "$projet" "$service"
 		_verifier_apres_demarrage "$service" "$url"
 		NB_MAJ=$((NB_MAJ + 1))
 		enregistrer_version "$service" "$ver_avant" "$(version_docker "$service" 2>/dev/null || echo "?")"
@@ -1285,7 +1404,25 @@ maintenir_service_docker() {
 	fi
 
 	# Digest inconnu ou different : pull, puis comparaison avant/apres.
-	run_etape "$service : pull de l'image" "$DELAI_PULL" compose "$projet" pull "$service"
+	local echecs_avant_pull=$NB_ECHEC
+	run_etape "$service : pull de l'image" "$(delai_etape_pull)" \
+		tirer_service "$projet" "$service"
+	# Un conteneur qui tourne n'est JAMAIS arrete si l'image cible n'est
+	# pas en local : `up` devrait la tirer et pourrait echouer de meme.
+	# 07/10/2026 : changement de tag, pull tue, service arrete et
+	# supprime puis jamais recree. Le passage suivant retentera.
+	if [ "$actif" = true ] && ! image_locale "$image"; then
+		if [ "$NB_ECHEC" -eq "$echecs_avant_pull" ]; then
+			# Pull reussi mais image absente : <image> ne correspond pas
+			# a celle du compose. A signaler, sinon jamais de mise a jour.
+			err "$service : $image absente en local malgre le pull (image du compose differente ?)"
+			NB_ECHEC=$((NB_ECHEC + 1))
+			_enregistrer "$service : image cible" "ECHEC" "0s"
+		fi
+		warn "$service : $image absente en local, le conteneur reste en service sur son image actuelle."
+		enregistrer_version "$service" "$ver_avant" "$ver_avant"
+		return 0
+	fi
 
 	d_apres="$(digest_image "$image")"
 	if [ "$actif" = true ] && [ "$a_jour" = true ] && [ "$d_avant" = "$d_apres" ] &&
@@ -1303,9 +1440,11 @@ maintenir_service_docker() {
 	if [ "$sauvegarder" = "oui" ]; then
 		run_etape "$service : sauvegarde" 600 creer_sauvegarde "$service" "$source" "${elements[@]}"
 	fi
-	run_etape "$service : redemarrage" 180 compose "$projet" up -d --remove-orphans "$service"
+	run_etape "$service : redemarrage" "$(delai_etape_up)" \
+		redemarrer_service "$projet" "$service"
 	_verifier_apres_demarrage "$service" "$url"
-	run_etape "$service : nettoyage images orphelines" 300 nettoyer_images
+	run_etape "$service : nettoyage images orphelines" \
+		"$(delai_etape_prune "$ATTENTE_PRUNE_SERVICE")" nettoyer_images "$ATTENTE_PRUNE_SERVICE"
 	NB_MAJ=$((NB_MAJ + 1))
 	enregistrer_version "$service" "$ver_avant" "$(version_docker "$service" 2>/dev/null || echo "?")"
 }

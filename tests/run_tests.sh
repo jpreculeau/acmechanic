@@ -312,6 +312,165 @@ out="$(bash -c '
 ')"
 check "rotation (garder 2) + verification SHA-256" eq "$out" "2 ok"
 
+echo "Docker : pulls et prune en parallele (incident du 07/10/2026)"
+unset DELAI_VERROU_EXCLUSIF DELAI_VERROU_PARTAGE
+# Les detenteurs du verrou posent un temoin SOUS le verrou : on attend
+# le temoin (10 s au plus) plutot qu'un delai fixe (machine chargee).
+ATTENDRE='attendre() {
+	local i
+	for i in $(seq 200); do [ -e "$1" ] && return 0; sleep 0.05; done
+	echo "temoin absent : $1" >&2; exit 1
+}'
+rm -f "$TMP/tient" "$TMP/prune-lance" "$TMP/docker-reel"
+out="$(bash -c "$ATTENDRE"'
+	SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"
+	avec_verrou_images partage bash -c "touch \"\$1/tient\"; sleep 2; echo pull" _ "$1" &
+	attendre "$1/tient"
+	DELAI_VERROU_EXCLUSIF=30 avec_verrou_images exclusif echo prune
+	wait
+' _ "$TMP" 2>/dev/null)"
+check "prune (exclusif) attend la fin du pull en cours (partage)" eq "$out" $'pull\nprune'
+rm -f "$TMP/tient"
+out="$(bash -c "$ATTENDRE"'
+	SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"
+	t="$1"; docker() { echo "docker $*" >>"$t/docker-reel"; }   # jamais le vrai Docker
+	avec_verrou_images partage bash -c "touch \"\$1/tient\"; sleep 2" _ "$1" &
+	attendre "$1/tient"
+	DELAI_VERROU_PARTAGE=0 avec_verrou_images partage true; echo "partage=$?"
+	DELAI_VERROU_EXCLUSIF=0 avec_verrou_images exclusif touch "$1/prune-lance"; echo "exclusif=$?"
+	DELAI_VERROU_EXCLUSIF=0 nettoyer_images; echo "prune-reporte=$?"
+	wait
+	DELAI_VERROU_EXCLUSIF=0 avec_verrou_images exclusif true; echo "libere=$?"
+	avec_verrou_images partage bash -c "sleep 2 &"
+	DELAI_VERROU_EXCLUSIF=0 avec_verrou_images exclusif true; echo "non-legue=$?"
+	avec_verrou_images exclusive true; echo "mode=$?"
+' _ "$TMP" 2>/dev/null)"
+check "un second pull (partage) passe pendant un pull" grep -qx 'partage=0' <<<"$out"
+check "un prune (exclusif) ne passe pas pendant un pull (code 75)" grep -qx 'exclusif=75' <<<"$out"
+check "commande non lancee sans le verrou" not test -e "$TMP/prune-lance"
+check "prune reporte sans echec quand des pulls tournent" grep -qx 'prune-reporte=0' <<<"$out"
+check "prune reporte : Docker jamais appele" not test -e "$TMP/docker-reel"
+check "verrou libere a la fin de la commande" grep -qx 'libere=0' <<<"$out"
+check "verrou non legue aux processus laisses derriere (8>&-)" grep -qx 'non-legue=0' <<<"$out"
+check "mode de verrou invalide refuse (code 2)" grep -qx 'mode=2' <<<"$out"
+# Delais d'etape = attente du verrou + delai de l'operation (sinon
+# run_etape couperait une etape qui attend encore le verrou).
+out="$(DELAI_VERROU_PARTAGE=7 DELAI_PULL=100 bash -c 'SERVICE_NAME=t
+	source "$ACMECHANIC_HOME/lib/common.sh"
+	echo "$(delai_etape_pull) $(delai_etape_up) $(delai_etape_prune) $(delai_etape_prune 5)"
+	DELAI_VERROU_EXCLUSIF=11; delai_etape_prune')"
+check "delais d'etape : attente du verrou comprise" eq "$out" $'107 187 400 305\n311'
+out="$(bash -c 'SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"
+	docker() { return 3; }; nettoyer_images 2>/dev/null; echo "rc=$?"')"
+check "prune en echec (verrou obtenu) : code de Docker remonte" eq "$out" "rc=3"
+# Bouchons : conteneur actif sur une autre image que celle du tag cible
+# (changement de tag), registre joignable. etat_verrou : vu de dehors.
+MSD_BOUCHONS="$ATTENDRE"'
+	SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"
+	conteneur_actif() { return 0; }; conteneur_a_jour() { return 1; }
+	version_docker() { echo v1; }; digest_image() { echo; }
+	digest_registre() { echo sha256:neuf; }; etat_sante() { echo healthy; }
+	config_a_jour() { return 0; }
+	etat_verrou() {   # libre | partage | exclusif
+		local f="$VERROU_DIR/maintenance-docker-prune.lock" x=0 s=0
+		flock -n -x "$f" true || x=$?
+		flock -n -s "$f" true || s=$?
+		if [ "$x" -eq 0 ]; then echo libre
+		elif [ "$x" -eq 1 ] && [ "$s" -eq 0 ]; then echo partage
+		elif [ "$x" -eq 1 ] && [ "$s" -eq 1 ]; then echo exclusif
+		else echo "erreur $x/$s"; fi
+	}'
+rm -f "$TMP/compose.log"
+out="$(bash -c "$MSD_BOUCHONS"'
+	docker() { return 1; }   # image cible absente en local
+	compose() { echo "$*" >>"$1/compose.log"; [ "$2" != pull ]; }
+	maintenir_service_docker "$1" svc "" editeur/app:latest non /d >/dev/null 2>&1
+	echo "echecs=$NB_ECHEC"' _ "$TMP")"
+check "pull en echec : un seul echec compte" eq "$out" "echecs=1"
+check "pull en echec : le pull a bien ete tente" grep -qE ' pull svc$' "$TMP/compose.log"
+check "pull en echec, image cible absente : conteneur actif jamais arrete" \
+	not grep -qE ' (down|up) ' "$TMP/compose.log"
+# Conteneur deja arrete : la garde ne s'applique pas, on tente la creation.
+rm -f "$TMP/compose.log"
+bash -c "$MSD_BOUCHONS"'
+	conteneur_actif() { return 1; }
+	docker() { return 1; }
+	compose() { echo "$*" >>"$1/compose.log"; [ "$2" != pull ]; }
+	maintenir_service_docker "$1" svc "" editeur/app:latest non /d' _ "$TMP" >/dev/null 2>&1
+check "conteneur arrete : creation tentee malgre le pull en echec" \
+	grep -qE ' up -d --remove-orphans svc$' "$TMP/compose.log"
+rm -f "$TMP/compose.log"
+out="$(bash -c "$MSD_BOUCHONS"'
+	docker() { [ "$1 $2" = "image prune" ]; }   # image absente ; prune OK
+	compose() { echo "$*" >>"$1/compose.log"; }   # pull « reussi »
+	maintenir_service_docker "$1" svc "" editeur/app:latest non /d >/dev/null 2>&1
+	echo "echecs=$NB_ECHEC"' _ "$TMP")"
+check "pull reussi mais image absente : echec signale" eq "$out" "echecs=1"
+check "pull reussi mais image absente : conteneur jamais arrete" \
+	not grep -qE ' (down|up) ' "$TMP/compose.log"
+rm -f "$TMP/compose.log"
+bash -c "$MSD_BOUCHONS"'
+	docker() {   # image cible tiree ; le prune note l etat du verrou
+		case "$1 $2" in
+		"image prune") echo "image prune [$(etat_verrou)]" >>"$VERROU_DIR/compose.log" ;;
+		esac
+		return 0
+	}
+	compose() { echo "$* [$(etat_verrou)]" >>"$1/compose.log"; }
+	maintenir_service_docker "$1" svc "" editeur/app:latest non /d' _ "$TMP" >/dev/null 2>&1
+out="$(cat "$TMP/compose.log" 2>/dev/null)"
+check "pull reussi : arret puis recreation" grep -qE ' down svc \[libre\]' <<<"$out"
+check "pull sous verrou partage" grep -qE ' pull svc \[partage\]' <<<"$out"
+check "up sous verrou partage (pull implicite des dependances)" grep -qE ' up -d .*svc \[partage\]' <<<"$out"
+check "prune sous verrou exclusif" grep -qx 'image prune \[exclusif\]' <<<"$out"
+# Des prune tiennent l'exclusif au-dela de DELAI_VERROU_PARTAGE : le
+# redemarrage qui suit un arret part quand meme (service jamais coupe).
+rm -f "$TMP/compose.log" "$TMP/tient" "$TMP/liberer"
+bash -c "$MSD_BOUCHONS"'
+	docker() { return 0; }
+	compose() { echo "$* [$(etat_verrou)]" >>"$1/compose.log"; }
+	trap '\''touch "$1/liberer"'\'' EXIT   # le detenteur part toujours
+	avec_verrou_images exclusif bash -c "touch \"\$1/tient\"
+		for i in \$(seq 600); do [ -e \"\$1/liberer\" ] && break; sleep 0.05; done" _ "$1" &
+	attendre "$1/tient"
+	d=$SECONDS
+	DELAI_VERROU_PARTAGE=0 DELAI_VERROU_EXCLUSIF=30 ATTENTE_PRUNE_SERVICE=0 \
+		maintenir_service_docker "$1" svc "" editeur/app:latest non /d
+	echo "duree=$((SECONDS - d))" >>"$1/compose.log"
+	touch "$1/liberer"; wait' _ "$TMP" >/dev/null 2>&1
+out="$(cat "$TMP/compose.log" 2>/dev/null)"
+check "prune apres mise a jour : attente courte, pas DELAI_VERROU_EXCLUSIF" \
+	test "$(sed -n 's/^duree=//p' <<<"$out")" -lt 15
+check "prune en cours : arret puis redemarrage quand meme" \
+	grep -qE ' down svc \[' <<<"$out"
+check "prune en cours : le service est relance sans verrou" \
+	grep -qE ' up -d --remove-orphans svc \[exclusif\]' <<<"$out"
+# Recreation (configuration modifiee, image a jour) : sous verrou partage.
+rm -f "$TMP/compose.log"
+bash -c "$MSD_BOUCHONS"'
+	conteneur_a_jour() { return 0; }; digest_image() { echo sha256:neuf; }
+	config_a_jour() { return 1; }   # configuration modifiee : recreation
+	docker() { return 0; }
+	compose() { echo "$* [$(etat_verrou)]" >>"$1/compose.log"; }
+	maintenir_service_docker "$1" svc "" editeur/app:latest non /d' _ "$TMP" >/dev/null 2>&1
+check "recreation (configuration modifiee) sous verrou partage" \
+	grep -qE ' up -d --force-recreate svc \[partage\]' "$TMP/compose.log"
+# Fichier de verrou illisible (autre compte) : « non obtenu », jamais
+# un redemarrage abandonne. Sans objet en root (lecture toujours permise).
+if [ "$(id -u)" -ne 0 ]; then
+	rm -f "$TMP/compose.log"
+	out="$(VERROU_DIR="$TMP/illisible" bash -c "$MSD_BOUCHONS"'
+		mkdir -p "$VERROU_DIR"; : >"$VERROU_DIR/maintenance-docker-prune.lock"
+		chmod 000 "$VERROU_DIR/maintenance-docker-prune.lock"
+		avec_verrou_images partage true 2>/dev/null; echo "rc=$?"
+		compose() { echo "$*" >>"$1/compose.log"; }
+		redemarrer_service "$1" svc >/dev/null 2>&1; echo "redemarrage=$?"' _ "$TMP")"
+	check "verrou illisible : code 75" grep -qx 'rc=75' <<<"$out"
+	check "verrou illisible : redemarrage reussi" grep -qx 'redemarrage=0' <<<"$out"
+	check "verrou illisible : le redemarrage part sans verrou" \
+		grep -qE ' up -d --remove-orphans svc$' "$TMP/compose.log"
+fi
+
 echo
 echo "Resultat : $PASS ok, $FAIL echec(s)"
 [ "$FAIL" -eq 0 ]

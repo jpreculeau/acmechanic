@@ -12,6 +12,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 ### Modifié
 - Service `bureau` renommé **`session-graphique`** (plus explicite : compositeur Wayland et barre). Réglages : `SESSION_GRAPHIQUE_PIP_GIT`, `SESSION_GRAPHIQUE_ETAT` ; les anciens `BUREAU_PIP_GIT` / `BUREAU_ETAT` restent lus. Mise à jour d'une installation : remplacer le lien `bureau` par `ln -s bibliotheque/session-graphique session-graphique`.
 
+### Corrigé
+- Pulls Docker tués par un `docker image prune` lancé en parallèle (magasin d'images containerd, par défaut sur les installations neuves de Docker 29 : le prune supprime les baux de **tous** les pulls en cours ; erreurs « lease does not exist », « content digest not found »). Les `compose pull` et `compose up` lancés par Acmechanic prennent désormais un verrou partagé et les prune un verrou exclusif (`avec_verrou_images`) : un pull ou un `up` n'attend que les prune en cours (`DELAI_VERROU_PARTAGE`, défaut 120 s) ; au-delà, un pull ou une recréation (sans arrêt préalable) est compté en échec et retenté au passage suivant, un redémarrage après arrêt part sans verrou plutôt que de laisser le service coupé. Le prune de `nettoyage` attend qu'aucun pull ne tourne (`DELAI_VERROU_EXCLUSIF`, défaut `DELAI_PULL`), celui qui suit la mise à jour d'un service 60 s au plus ; au-delà, il est reporté sans échec (`nettoyage` peut donc durer plus longtemps). Le fichier de verrou suit désormais `VERROU_DIR` (défaut `/tmp`, inchangé) ; un fichier impossible à créer ou illisible vaut « verrou non obtenu ».
+- `maintenir_service_docker` : un conteneur en service n'est plus jamais arrêté quand l'image cible est absente en local après le pull (pull en échec, changement de tag) ; il reste sur son image actuelle jusqu'au passage suivant. Un pull réussi qui ne fournit pas l'image attendue (image du compose différente) est signalé en échec.
+
 ## [1.1.0] - 2026-09-29
 
 ### Ajouté

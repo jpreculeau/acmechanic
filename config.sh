@@ -38,7 +38,8 @@ if [[ -z "${EXCLUS+x}" ]]; then EXCLUS=(acmechanic restore); fi
 
 # --- Délais (secondes) -------------------------------------------------------
 # Par service : doit couvrir un gros pull (DELAI_PULL, lib/common.sh)
-# + arrêt + sauvegarde + redémarrage + vérification (~2500 s au pire).
+# + arrêt + sauvegarde + redémarrage + vérification + nettoyage, attentes
+# du verrou des images comprises (~2970 s au pire avec les défauts).
 : "${DELAI_SERVICE:=3000}"
 : "${DELAI_SYSTEME:=1800}"             # upgrade Nala / APT
 

@@ -9,6 +9,8 @@
 # --- Délais ---
 # DELAI_SERVICE=3000
 # DELAI_SYSTEME=1800
+# DELAI_VERROU_PARTAGE=120     # pull/up derrière un prune en cours
+# DELAI_VERROU_EXCLUSIF=1200   # prune de nettoyage derrière les pulls
 
 # --- Sauvegardes ---
 # BACKUP_ROOT="/chemin/vers/disque/backups"

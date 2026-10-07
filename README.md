@@ -128,6 +128,8 @@ Ne modifiez pas `config.sh` : surchargez ses variables dans **`local.conf`** (ig
 | `EXCLUS` | `(acmechanic restore)` | Scripts jamais lancés comme services |
 | `DELAI_SERVICE` | `3000` | Délai max d'un service (s) |
 | `DELAI_SYSTEME` | `1800` | Délai max de l'upgrade système (s) |
+| `DELAI_VERROU_PARTAGE` | `120` | Attente max (s) d'un pull ou d'un `up` derrière un `docker image prune` en cours (s'ajoute au délai de ces étapes, donc au budget `DELAI_SERVICE`) |
+| `DELAI_VERROU_EXCLUSIF` | `DELAI_PULL` (1200) | Attente max (s) du prune de `nettoyage` derrière les pulls en cours ; au-delà, il est reporté |
 | `BACKUP_ROOT` | `~/backups` | Racine des sauvegardes |
 | `BACKUP_GARDER` | `5` | Archives conservées par service |
 | `LIMITE_CPU` / `LIMITE_RAM_SOUPLE` / `LIMITE_RAM_DURE` | `200%` / `1G` / `2G` | Bornes du cgroup de chaque service |

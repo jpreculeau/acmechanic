@@ -38,9 +38,9 @@ LIBRE_AVANT="$(libre_ko "$HOME" /)"
 
 # --- Docker --------------------------------------------------------------------
 if [ "$NETTOYAGE_DOCKER" = oui ] && command -v docker >/dev/null 2>&1; then
-	# Meme verrou que nettoyer_images (lib/common.sh) : pas deux prune en meme temps.
-	run_etape "Docker : images sans etiquette" 300 \
-		flock -w 300 /tmp/maintenance-docker-prune.lock docker image prune -f
+	# nettoyer_images (lib/common.sh) : attend la fin des pulls en cours,
+	# qu'un prune tuerait (magasin d'images containerd).
+	run_etape "Docker : images sans etiquette" "$(delai_etape_prune)" nettoyer_images
 	run_etape "Docker : cache de construction > $NETTOYAGE_DOCKER_CACHE_AGE" 300 \
 		docker builder prune -f --filter "until=$NETTOYAGE_DOCKER_CACHE_AGE"
 else
