@@ -365,6 +365,44 @@ if [ "$faire_systeme" = true ] && [ "$SUDO_OK" = true ] && [ -n "$GESTIONNAIRE" 
 	PID_RAFRAICHISSEMENT=$!
 fi
 
+# sans_marqueurs : rend lisible une sortie de service ou de tache
+# anticipee. Les marqueurs \x1fETAPE\x1f de l'affichage fixe (lib/common.sh,
+# _log_raw) y deviennent « ETAPE : », au lieu de rester colles au texte.
+sans_marqueurs() {
+	LC_ALL=C sed -E $'s/^\x1f([A-Z]+)\x1f/\\1 : /; s/\x1f//g'
+}
+
+# fin_de_sortie <service> : les 20 dernieres lignes de sa sortie, a
+# l'ecran ET au journal : le fichier <service>.sortie est ecrase au
+# passage suivant, le journal garde la trace d'un echec.
+# Au journal, sans sequences de terminal (sans_sequences).
+fin_de_sortie() {
+	local extrait
+	# tr : un octet nul ferait protester bash a la substitution.
+	extrait="$(tail -n 20 "$DOSSIER_SORTIES/$1.sortie" 2>/dev/null | tr -d '\0' |
+		sans_marqueurs | sed 's/^/    /')"
+	[ -n "$extrait" ] || return 0
+	printf '%s\n' "$extrait"
+	printf '%s\n' "$extrait" | sans_sequences >>"$LOG_FILE"
+}
+
+# sans_sequences : retire ce qui n'a de sens que sur un terminal.
+# Sequences CSI (couleurs, curseur ; forme ECMA-48 : parametres 0-?,
+# intermediaires espace-/, octet final @-~), OSC (titre, liens), choix
+# du jeu de caracteres (ESC ( B, emis par tput sgr0). Un retour chariot
+# de fin de ligne (CRLF) disparait ; ailleurs (barre de progression), il
+# devient une espace. LC_ALL=C : les plages sont des plages d'octets ;
+# sous une locale comme fr_FR.UTF-8, sed les refuse (« fin d'intervalle
+# invalide »). Les octets UTF-8 (>= 0x80) sont hors de ces plages.
+sans_sequences() {
+	LC_ALL=C sed -E \
+		-e $'s/\x1b\\[[0-?]*[ -\\/]*[@-~]//g' \
+		-e $'s/\x1b\\][^\x07\x1b]*(\x07|\x1b\\\\)//g' \
+		-e $'s/\x1b[()][0-9A-Za-z]//g' \
+		-e $'s/\r$//' \
+		-e $'s/\r/ /g'
+}
+
 # attendre_rafraichissement : attend la fin du rafraichissement anticipe
 # et renvoie son code (appele via run_etape, donc dans un sous-shell :
 # on ne peut pas `wait` sur le PID, on lit le code dans le fichier).
@@ -372,7 +410,7 @@ attendre_rafraichissement() {
 	while ! grep -q '^CODE=' "$FICHIER_RAFRAICHISSEMENT" 2>/dev/null; do
 		sleep 1
 	done
-	tr -d '\037' <"$FICHIER_ANTICIPE" >>"$LOG_FILE"
+	sans_marqueurs <"$FICHIER_ANTICIPE" >>"$LOG_FILE"
 	return "$(sed -n 's/^CODE=//p' "$FICHIER_RAFRAICHISSEMENT" | tail -1)"
 }
 
@@ -462,7 +500,7 @@ recolter_termines() {
 				SERVICES_EN_ECHEC+=("$nom")
 			else
 				warn "Fin de la sortie de $nom ($DOSSIER_SORTIES/$nom.sortie) :"
-				tail -n 20 "$DOSSIER_SORTIES/$nom.sortie" 2>/dev/null | sed 's/^/    /'
+				fin_de_sortie "$nom"
 			fi
 		fi
 
@@ -742,7 +780,7 @@ if [ "$TABLEAU" = oui ]; then
 	for nom in "${SERVICES_EN_ECHEC[@]}"; do
 		echo
 		warn "Fin de la sortie de $nom ($DOSSIER_SORTIES/$nom.sortie) :"
-		tail -n 20 "$DOSSIER_SORTIES/$nom.sortie" 2>/dev/null | tr -d '\037' | sed 's/^/    /'
+		fin_de_sortie "$nom"
 	done
 	tableau_bilan "$ETAPES_OK" "$NB_IGNORE" "$ETAPES_ECHEC"
 	printf ' %s%s %s%s\n' "$_T_TERNE" "${_ICONE_STATUT[DOSSIER]}" "$(t sorties "$DOSSIER_SORTIES/")" "$_T_RAZ"

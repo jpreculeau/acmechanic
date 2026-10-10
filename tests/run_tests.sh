@@ -605,6 +605,43 @@ if [ "$(id -u)" -ne 0 ]; then
 		grep -q 'ERREUR .*autre compte' "$LOG_DIR/test-autre.log"
 fi
 
+echo "journal : sorties lisibles"
+# Tache anticipee d'un passage --systeme : au journal, le marqueur
+# d'etape est separe de son texte.
+passage_systeme apt-get >/dev/null
+check "tache anticipee : marqueur separe du texte au journal" \
+	not grep -qE '^(ETAPE|OK|ERREUR)[^ ]' "$LOG_DIR/acmechanic.log"
+check "tache anticipee : son etape est au journal" \
+	grep -qE '^ETAPE : .*apt-get update' "$LOG_DIR/acmechanic.log"
+# Service en echec : la fin de sa sortie est gardee au journal (le
+# fichier <service>.sortie est ecrase au passage suivant).
+SK="$TMP/services-ko"
+mkdir -p "$SK/enpanne"
+printf '#!/bin/bash\nSERVICE_NAME=enpanne\nsource "${ACMECHANIC_HOME}/lib/common.sh"\nprintf "\\033]0;titre\\007\\033[31mtrace-de-la-panne\\033(B\\033[0m\\n"\nprintf "octet\\0nul\\n"\nexit 1\n' \
+	>"$SK/enpanne/enpanne.sh"
+chmod +x "$SK/enpanne/enpanne.sh"
+# Bouchons en tete du PATH : ni sudo, ni Docker, ni reseau (un passage
+# avec un service detecte prechauffe le cache du registre).
+BK="$TMP/bouchons-ko"
+mkdir -p "$BK"
+for c in sudo docker curl; do
+	printf '#!/bin/sh\necho "$0 $*" >>"%s/appels"\n' "$BK" >"$BK/$c"
+	chmod +x "$BK/$c"
+done
+# Sous fr_FR.UTF-8 quand elle existe (la CI la genere) : les plages de
+# sed dependent de la collation, et celle-ci refuse [0-?].
+locale_reelle="$(locale -a 2>/dev/null | grep -iE '^fr_FR\.utf-?8$' | head -n 1)"
+LC_ALL="${locale_reelle:-$LC_ALL}" PATH="$BK:$PATH" SERVICES_DIR="$SK" ORDRE_DIR="$TMP/vide" \
+	ACMECHANIC_AUTO_MAJ=non "$C/acmechanic.sh" --services </dev/null >/dev/null 2>"$TMP/enpanne.err"
+check "service en echec : passage en echec" eq "$?" 1
+check "service en echec : le sudo appele est le bouchon" grep -q "^$BK/sudo " "$BK/appels"
+check "service en echec : le docker appele est le bouchon" grep -q "^$BK/docker " "$BK/appels"
+check "service en echec : fin de sa sortie au journal, sans sequences de terminal" \
+	grep -q '^    trace-de-la-panne$' "$LOG_DIR/acmechanic.log"
+check "service en echec : octet nul retire" grep -q '^    octetnul$' "$LOG_DIR/acmechanic.log"
+check "service en echec : octet nul retire avant bash, sans avertissement" \
+	not grep -qiE 'null byte|octet nul' "$TMP/enpanne.err"
+
 echo "restore.sh : redemarrage sous le verrou des images"
 # Restauration de bout en bout d'un service Docker, depuis une copie avec
 # son propre local.conf ; le faux docker (en tete du PATH) note chaque

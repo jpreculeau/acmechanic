@@ -6,4 +6,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y shellcheck psmisc   # psmisc : fuser, pour le test du detenteur du verrou
+      - run: sudo locale-gen fr_FR.UTF-8   # un test joue sous cette locale (plages de sed)
       - run: make lint test

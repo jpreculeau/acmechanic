@@ -10,6 +10,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 - Tâches anticipées visibles : le rafraîchissement des dépôts lancé pendant les services s'affiche dans la case « systeme » dès qu'il tourne ; il vaut désormais pour APT comme pour Nala.
 
 ### Modifié
+- Journal : la fin de la sortie d'un service en échec (20 lignes) y est désormais recopiée, et plus seulement affichée ; les marqueurs d'étape des sorties recopiées (`ETAPE`, `OK`, `ERREUR`) sont séparés de leur texte.
 - Service `bureau` renommé **`session-graphique`** (plus explicite : compositeur Wayland et barre). Réglages : `SESSION_GRAPHIQUE_PIP_GIT`, `SESSION_GRAPHIQUE_ETAT` ; les anciens `BUREAU_PIP_GIT` / `BUREAU_ETAT` restent lus. Mise à jour d'une installation : remplacer le lien `bureau` par `ln -s bibliotheque/session-graphique session-graphique`.
 
 ### Corrigé
