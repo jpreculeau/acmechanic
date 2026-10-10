@@ -12,6 +12,16 @@
 # DELAI_VERROU_PARTAGE=120     # pull/up derrière un prune en cours
 # DELAI_VERROU_EXCLUSIF=1200   # prune de nettoyage derrière les pulls
 
+# --- Verrous ---
+# Dossier à créer vous-même (mkdir -p) : absent, plus de verrou par script
+# et les pulls échouent. Persistant de préférence, si /tmp est purgé par un
+# outil qui ignore les verrous (un systemd-tmpfiles récent les respecte).
+# Même valeur pour TOUS les scripts : `export` la transmet aux services
+# lancés par l'orchestrateur, y compris ceux qui ne lisent pas local.conf.
+# Et pour un prune à la main :
+#   flock -x <VERROU_DIR>/maintenance-docker-prune.lock docker image prune -f
+# export VERROU_DIR="$HOME/.local/state/acmechanic"   # défaut : /tmp
+
 # --- Sauvegardes ---
 # BACKUP_ROOT="/chemin/vers/disque/backups"
 # BACKUP_GARDER=5
