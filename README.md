@@ -51,7 +51,7 @@ acmechanic --liste                      # vérifier la détection
 sudo ln -s ~/acmechanic/acmechanic.sh /usr/local/bin/acmechanic
 ```
 
-**Dépendances** : `bash` ≥ 5, `docker` + plugin `compose`, `curl`, `tar`, `flock`, `timeout` (coreutils). Optionnel : `nala`, `flatpak`, `systemd-run` (bridage), une [Nerd Font](https://www.nerdfonts.com/) pour les icônes.
+**Dépendances** : `bash` ≥ 5, `docker` + plugin `compose`, `curl`, `tar`, `flock`, `timeout` (coreutils). Optionnel : `nala`, `flatpak`, `systemd-run` (bridage), `fuser` (paquet `psmisc` : nomme le processus qui tient un verrou), une [Nerd Font](https://www.nerdfonts.com/) pour les icônes.
 
 Pour les mises à jour système, `sudo` doit être utilisable sans mot de passe (`sudo -v` avant de lancer, ou règle `sudoers` dédiée) ; sinon ces étapes sont simplement **ignorées**.
 

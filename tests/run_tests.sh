@@ -554,6 +554,29 @@ check "ouverture du verrou en echec : le service est relance" grep -qx 'demarrag
 check "ouverture du verrou en echec : relance sans verrou" \
 	grep -qE ' up -d svc$' "$TMP/compose.log"
 
+echo "verrou : execution deja en cours"
+# Le verrou est tenu par un autre processus : arret, et un conseil qui ne
+# fait pas supprimer le fichier (un processus qui le tient encore
+# garderait son verrou sur l'ancien fichier : exclusion rompue).
+mkdir -p "$TMP/verrou-tenu"
+# flock -o : le detenteur ne legue pas son descripteur au script refuse.
+flock -x -o "$TMP/verrou-tenu/maintenance-test-tenu.lock" \
+	env VERROU_DIR="$TMP/verrou-tenu" bash -c '
+	SERVICE_NAME=test-tenu
+	source "$ACMECHANIC_HOME/lib/common.sh"
+	prendre_verrou
+	echo "suite sans verrou" >"$VERROU_DIR/suite"' >/dev/null 2>&1
+check "verrou tenu : arret, code 1" eq "$?" 1
+check "verrou tenu : rien ne tourne sans verrou" not test -e "$TMP/verrou-tenu/suite"
+check "verrou tenu : conseil de chercher le processus" \
+	grep -q 'ERREUR .*fuser -v' "$LOG_DIR/test-tenu.log"
+check "verrou tenu : ne conseille plus de supprimer le verrou" \
+	not grep -q 'ou supprimez le verrou' "$LOG_DIR/test-tenu.log"
+if command -v fuser >/dev/null 2>&1; then
+	check "verrou tenu : seul le detenteur est liste, pas le script refuse" \
+		grep -qE 'processus : [0-9]+\)$' "$LOG_DIR/test-tenu.log"
+fi
+
 echo "verrou : dossier des verrous absent"
 out="$(VERROU_DIR="$TMP/absent" bash -c '
 	SERVICE_NAME=test-verrou

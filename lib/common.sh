@@ -291,11 +291,18 @@ prendre_verrou() {
 	fi
 	if ! flock -n 9; then
 		local detenteur
+		# Descripteur ferme avant fuser : ce script, qui a lui aussi le
+		# fichier ouvert, se listerait parmi les detenteurs.
+		exec 9>&-
 		detenteur="$(fuser "$fichier" 2>/dev/null | tr -s ' ')"
 		err "Une autre execution de $nom est deja en cours."
 		err "Verrou : $fichier${detenteur:+ (processus :$detenteur)}"
-		err "Attendez la fin de l'execution en cours, ou supprimez le verrou"
-		err "si vous etes certain qu'aucune maintenance ne tourne."
+		# Jamais « supprimez le verrou » : le processus qui le tient
+		# garderait le sien sur l'ancien fichier, et le suivant en
+		# prendrait un autre : deux executions a la fois.
+		err "Attendez sa fin. Si elle semble bloquee, cherchez le processus"
+		err "qui tient le verrou : fuser -v ${fichier@Q}"
+		err "Ne supprimez pas ce fichier : l'exclusion serait rompue."
 		exit 1
 	fi
 	VERROU_ACTIF="$fichier"
