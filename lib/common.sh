@@ -1296,18 +1296,27 @@ tirer_service() {
 	avec_verrou_images partage compose "$1" pull "$2"
 }
 
-# redemarrer_service <projet> <service...> : `up` apres un arret, jamais
-# abandonne faute de verrou (des prune peuvent s'enchainer) : au-dela de
-# DELAI_VERROU_PARTAGE, on relance sans verrou. Seul un pull implicite
-# (image manquante) resterait alors expose a un prune, contre un service
-# coupe faute de verrou jusqu'au passage suivant sinon.
-redemarrer_service() {
+# demarrer_service <projet> <arguments de `up -d`...> : `up` apres un
+# arret, jamais abandonne faute de verrou (des prune peuvent
+# s'enchainer) : au-dela de DELAI_VERROU_PARTAGE, on relance sans verrou.
+# Seul un pull implicite (image manquante) resterait alors expose a un
+# prune, contre un service coupe faute de verrou jusqu'au passage suivant
+# sinon.
+demarrer_service() {
 	local projet="$1" rc=0
 	shift
-	avec_verrou_images partage compose "$projet" up -d --remove-orphans "$@" || rc=$?
+	avec_verrou_images partage compose "$projet" up -d "$@" || rc=$?
 	[ "$rc" -eq "$VERROU_NON_OBTENU" ] || return "$rc"
-	warn "$* : verrou des images non obtenu, redemarrage sans verrou."
-	compose "$projet" up -d --remove-orphans "$@"
+	warn "up -d $* : verrou des images non obtenu, demarrage sans verrou."
+	compose "$projet" up -d "$@"
+}
+
+# redemarrer_service <projet> <service...> : demarrer_service pendant un
+# passage, ou les conteneurs orphelins du projet sont retires.
+redemarrer_service() {
+	local projet="$1"
+	shift
+	demarrer_service "$projet" --remove-orphans "$@"
 }
 
 # image_locale <image:tag> : vrai si l'image est presente en local.

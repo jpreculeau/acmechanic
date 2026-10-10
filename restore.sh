@@ -218,7 +218,11 @@ else
 	# 4. Redemarrage et verification.
 	if [ -n "$projet" ] && [ -d "$projet" ]; then
 		step "Redemarrage de $conteneur"
-		if compose "$projet" up -d "$conteneur" 2>>"$LOG_FILE"; then
+		# demarrer_service : sous le verrou des images, comme tout `up`
+		# (il peut tirer une image, qu'un prune en cours tuerait).
+		# Sa sortie d'erreur (attente du verrou, erreurs du `up`) va au
+		# journal et a l'ecran (tee).
+		if demarrer_service "$projet" "$conteneur" 2> >(tee -a "$LOG_FILE" >&2); then
 			ok "Conteneur relance"
 		else
 			err "Echec du redemarrage. Relancez a la main :"

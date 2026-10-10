@@ -505,6 +505,61 @@ for gest in nala apt-get; do
 		grep -q -- ' -o Dpkg::Options::=--force-confdef' <<<"$ligne"
 done
 
+echo "restore.sh : redemarrage sous le verrou des images"
+# Restauration de bout en bout d'un service Docker, depuis une copie avec
+# son propre local.conf ; le faux docker (en tete du PATH) note chaque
+# appel et l'etat du verrou des images vu de dehors.
+R="$TMP/restore"
+mkdir -p "$R/acm" "$R/bin" "$R/projet" "$R/donnees" "$R/source" "$R/sauvegardes/appli" "$R/verrou"
+cp -r "$ROOT/restore.sh" "$ROOT/config.sh" "$ROOT/lib" "$ROOT/locale" "$R/acm"/
+cat >"$R/acm/local.conf" <<FIN
+SERVICES_CONNUS=(appli)
+config_service() {
+	case "\$2" in
+	type) echo docker ;;
+	cible) echo "$R/donnees" ;;
+	projet) echo "$R/projet" ;;
+	conteneur) echo appli ;;
+	esac
+}
+FIN
+echo ancien >"$R/donnees/fichier"
+echo restaure >"$R/source/fichier"
+tar czf "$R/sauvegardes/appli/appli_2026-01-01_00-00-00.tar.gz" -C "$R/source" fichier
+cat >"$R/bin/docker" <<'FIN'
+#!/usr/bin/env bash
+f="$VERROU_DIR/maintenance-docker-prune.lock" etat=libre
+if [ -e "$f" ] && ! flock -n -x "$f" true; then
+	etat=exclusif
+	flock -n -s "$f" true && etat=partage
+fi
+echo "$* [$etat]" >>"$DOCKER_TEMOIN"
+FIN
+chmod +x "$R/bin/docker"
+DOCKER_TEMOIN="$R/docker.log" PATH="$R/bin:$PATH" BACKUP_ROOT="$R/sauvegardes" VERROU_DIR="$R/verrou" \
+	"$R/acm/restore.sh" appli 1 <<<oui >/dev/null 2>&1
+check "restore.sh : donnees restaurees" eq "$(cat "$R/donnees/fichier" 2>/dev/null)" restaure
+check "restore.sh : conteneur arrete avant la restauration" \
+	grep -qE '^compose .* stop appli \[' "$R/docker.log"
+check "restore.sh : redemarrage sous verrou partage, sans rien retirer" \
+	grep -qE '^compose .* up -d appli \[partage\]$' "$R/docker.log"
+# Un prune en cours (verrou exclusif) : l'attente est dite a l'ecran. Le
+# faux prune ne rend le verrou qu'une fois cette annonce vue (30 s au plus).
+rm -f "$R/docker.log"
+: >"$R/ecran"
+flock -x "$R/verrou/maintenance-docker-prune.lock" timeout 30 bash -c '
+	until grep -q "En attente du verrou" "$1"; do sleep 0.2; done' _ "$R/ecran" &
+for _ in $(seq 100); do   # 10 s au plus : le faux prune tient le verrou
+	flock -n -x "$R/verrou/maintenance-docker-prune.lock" true || break
+	sleep 0.1
+done
+DOCKER_TEMOIN="$R/docker.log" PATH="$R/bin:$PATH" BACKUP_ROOT="$R/sauvegardes" VERROU_DIR="$R/verrou" \
+	"$R/acm/restore.sh" appli 1 <<<oui >"$R/ecran" 2>&1
+wait
+check "restore.sh : attente du verrou annoncee a l'ecran" grep -q 'En attente du verrou' "$R/ecran"
+check "restore.sh : redemarrage une fois le prune fini" \
+	grep -qE '^compose .* up -d appli \[partage\]$' "$R/docker.log"
+
 echo
 echo "Resultat : $PASS ok, $FAIL echec(s)"
 [ "$FAIL" -eq 0 ]
