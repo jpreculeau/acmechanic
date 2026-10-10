@@ -423,6 +423,35 @@ check "pull reussi : arret puis recreation" grep -qE ' down svc \[libre\]' <<<"$
 check "pull sous verrou partage" grep -qE ' pull svc \[partage\]' <<<"$out"
 check "up sous verrou partage (pull implicite des dependances)" grep -qE ' up -d .*svc \[partage\]' <<<"$out"
 check "prune sous verrou exclusif" grep -qx 'image prune \[exclusif\]' <<<"$out"
+# Delais passes a run_etape, a chaque appel : l'attente du verrou y est
+# comprise (delai_etape_*), sinon l'etape serait coupee pendant qu'elle
+# attend encore un prune. Le faux run_etape note <libelle>|<delai>.
+ETAPES_BOUCHON='
+	run_etape() { echo "$1|$2" >>"$ETAPES"; shift 2; "$@"; }
+	docker() { return 0; }
+	compose() { :; }'
+delais_etapes() {  # delais_etapes <bouchons en plus> : etapes d un passage de maintenir_service_docker
+	rm -f "$TMP/etapes.log"
+	ETAPES="$TMP/etapes.log" DELAI_VERROU_PARTAGE=7 DELAI_PULL=100 ATTENTE_PRUNE_SERVICE=5 \
+		bash -c "$MSD_BOUCHONS$ETAPES_BOUCHON$1"'
+		maintenir_service_docker "$1" svc "" editeur/app:latest non /d' _ "$TMP" >/dev/null 2>&1
+	cat "$TMP/etapes.log" 2>/dev/null
+}
+out="$(delais_etapes '')"
+check "mise a jour : delai du pull, attente du verrou comprise" grep -qx "svc : pull de l'image|107" <<<"$out"
+check "mise a jour : delai du redemarrage, attente du verrou comprise" grep -qx 'svc : redemarrage|187' <<<"$out"
+check "mise a jour : delai du prune, attente courte comprise" \
+	grep -qx 'svc : nettoyage images orphelines|305' <<<"$out"
+out="$(delais_etapes '
+	conteneur_a_jour() { return 0; }; digest_image() { echo sha256:neuf; }
+	config_a_jour() { return 1; }')"
+check "recreation : delai du up, attente du verrou comprise" grep -qx 'svc : recreation|187' <<<"$out"
+out="$(delais_etapes '
+	conteneur_actif() { return 1; }; version_docker() { return 1; }')"
+check "conteneur absent : delai du pull, attente du verrou comprise" grep -qx "svc : pull de l'image|107" <<<"$out"
+check "conteneur absent : delai du redemarrage, attente du verrou comprise" \
+	grep -qx 'svc : redemarrage|187' <<<"$out"
+check "conteneur absent : creation sans arret ni prune" not grep -qE 'arret|nettoyage' <<<"$out"
 # Des prune tiennent l'exclusif au-dela de DELAI_VERROU_PARTAGE : le
 # redemarrage qui suit un arret part quand meme (service jamais coupe).
 rm -f "$TMP/compose.log" "$TMP/tient" "$TMP/liberer"
