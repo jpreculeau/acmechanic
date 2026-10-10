@@ -471,6 +471,40 @@ if [ "$(id -u)" -ne 0 ]; then
 		grep -qE ' up -d --remove-orphans svc$' "$TMP/compose.log"
 fi
 
+echo "systeme : fichiers de configuration modifies (dpkg)"
+# Passage --systeme de bout en bout, avec un PATH reduit a un dossier de
+# liens : le sudo et le gestionnaire de paquets y sont des bouchons (le
+# faux sudo note ses arguments et n'execute rien), les vrais sont hors
+# d'atteinte. Lance depuis une copie sans local.conf ni depot git : les
+# reglages de la machine ne priment pas sur ceux du test.
+C="$TMP/copie-systeme"
+mkdir -p "$C"
+cp -r "$ROOT/acmechanic.sh" "$ROOT/config.sh" "$ROOT/lib" "$ROOT/locale" "$C"/
+P="$TMP/path-systeme"
+mkdir -p "$P"
+IFS=: read -ra dossiers_path <<<"$PATH"
+for d in "${dossiers_path[@]}"; do cp -s "$d"/* "$P"/ 2>/dev/null; done
+rm -f "$P/sudo" "$P/nala" "$P/apt-get"
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"$SUDO_TEMOIN"\n' >"$P/sudo"
+chmod +x "$P/sudo"
+passage_systeme() {  # passage_systeme <gestionnaire> : affiche la ligne de mise a jour vue par sudo
+	printf '#!/bin/sh\n' >"$P/$1"
+	chmod +x "$P/$1"
+	SUDO_TEMOIN="$TMP/sudo-$1" PATH="$P" SERVICES_DIR="$TMP/vide" ORDRE_DIR="$TMP/vide" \
+		ACMECHANIC_AUTO_MAJ=non "$C/acmechanic.sh" --systeme </dev/null >/dev/null 2>&1
+	rm -f "$P/$1"
+	grep -E " $1 .*upgrade" "$TMP/sudo-$1"
+}
+for gest in nala apt-get; do
+	ligne="$(passage_systeme "$gest")"
+	check "$gest : mise a jour lancee, sans question (noninteractive, -y)" \
+		grep -qE "^-n env DEBIAN_FRONTEND=noninteractive $gest .*-y" <<<"$ligne"
+	check "$gest : fichier de configuration modifie garde (--force-confold)" \
+		grep -q -- ' -o Dpkg::Options::=--force-confold' <<<"$ligne"
+	check "$gest : choix par defaut de dpkg quand il existe (--force-confdef)" \
+		grep -q -- ' -o Dpkg::Options::=--force-confdef' <<<"$ligne"
+done
+
 echo
 echo "Resultat : $PASS ok, $FAIL echec(s)"
 [ "$FAIL" -eq 0 ]

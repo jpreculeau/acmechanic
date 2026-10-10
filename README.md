@@ -33,7 +33,7 @@
 - 🔢 **Bilan lisible** : services mis à jour / inchangés / en échec, total des étapes, et versions dont seule la partie qui change est mise en évidence (façon nala)
 - 🌍 **Multilingue** : français et anglais (textes « dessin animé » compris), autres langues par simple catalogue
 - 🛡️ **Robuste** : verrous `flock`, délais par étape, watchdog anti-fige, Ctrl+C / fermeture de terminal qui arrêtent proprement tout l'arbre
-- 🐧 **Système** : Nala (ou APT en repli), rafraîchissement des dépôts anticipé pendant les services, signalement du redémarrage requis
+- 🐧 **Système** : Nala (ou APT en repli), rafraîchissement des dépôts anticipé pendant les services, fichiers de configuration modifiés gardés (la version du paquet en `.dpkg-dist`), signalement du redémarrage requis
 
 ## 🚀 Installation
 

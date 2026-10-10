@@ -607,7 +607,14 @@ if [ "$faire_systeme" = true ]; then
 		ignorer_etape "Mise a jour du systeme" "sudo indisponible sans mot de passe"
 	elif [ -n "$GESTIONNAIRE" ]; then
 		# DEBIAN_FRONTEND=noninteractive : aucune question posee pendant
-		# l'installation, indispensable sans surveillance.
+		# l'installation, indispensable sans surveillance. Il ne couvre
+		# que debconf : la question de dpkg sur un fichier de
+		# configuration modifie sur la machine demande ses propres
+		# options, sans quoi la mise a jour echoue faute de reponse.
+		# --force-confdef : choix par defaut de dpkg quand il en a un ;
+		# --force-confold : sinon, le fichier de la machine est garde et
+		# celui du paquet est pose a cote, en .dpkg-dist.
+		options_dpkg=(-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
 		nom_gest="Nala"
 		[ "$GESTIONNAIRE" = apt-get ] && nom_gest="APT"
 		if [ -n "$PID_RAFRAICHISSEMENT" ]; then
@@ -619,12 +626,12 @@ if [ "$faire_systeme" = true ]; then
 		fi
 		if [ "$GESTIONNAIRE" = nala ]; then
 			run_etape "Nala : mise a jour des paquets" "$DELAI_SYSTEME" \
-				sudo -n env DEBIAN_FRONTEND=noninteractive nala upgrade -y
+				sudo -n env DEBIAN_FRONTEND=noninteractive nala upgrade -y "${options_dpkg[@]}"
 			run_etape "Nala : suppression des paquets inutiles" 600 \
 				sudo -n env DEBIAN_FRONTEND=noninteractive nala autoremove -y
 		else
 			run_etape "APT : mise a jour des paquets" "$DELAI_SYSTEME" \
-				sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -y full-upgrade
+				sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -y "${options_dpkg[@]}" full-upgrade
 			run_etape "APT : suppression des paquets inutiles" 600 \
 				sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -y autoremove
 		fi
