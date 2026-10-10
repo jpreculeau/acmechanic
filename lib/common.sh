@@ -278,7 +278,17 @@ prendre_verrou() {
 	# VERROU_DIR : dossier des verrous (les tests en utilisent un a part,
 	# pour ne jamais gener une maintenance reelle en cours).
 	local fichier="${VERROU_DIR:-/tmp}/maintenance-$nom.lock"
-	exec 9>"$fichier" || return 0
+	# Fichier impossible a ouvrir (dossier absent ou non inscriptible,
+	# fichier d'un autre compte) : on s'arrete. Continuer sans verrou
+	# laisserait tourner deux executions a la fois. L'erreur de bash
+	# reste affichee : sans terminal (cron), err n'ecrit qu'au journal.
+	if ! exec 9>"$fichier"; then
+		err "Verrou impossible a ouvrir : $fichier"
+		err "Causes possibles : dossier des verrous (VERROU_DIR) absent ou"
+		err "non inscriptible, ou fichier appartenant a un autre compte."
+		err "Rien n'a ete lance."
+		exit 1
+	fi
 	if ! flock -n 9; then
 		local detenteur
 		detenteur="$(fuser "$fichier" 2>/dev/null | tr -s ' ')"

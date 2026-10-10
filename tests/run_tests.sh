@@ -505,6 +505,34 @@ for gest in nala apt-get; do
 		grep -q -- ' -o Dpkg::Options::=--force-confdef' <<<"$ligne"
 done
 
+echo "verrou : dossier des verrous absent"
+out="$(VERROU_DIR="$TMP/absent" bash -c '
+	SERVICE_NAME=test-verrou
+	source "$ACMECHANIC_HOME/lib/common.sh"
+	prendre_verrou
+	echo "suite sans verrou"' 2>&1)"
+rc=$?
+check "dossier des verrous absent : arret, code 1" eq "$rc" 1
+check "dossier des verrous absent : rien ne tourne sans verrou" not grep -q 'suite sans verrou' <<<"$out"
+check "dossier des verrous absent : VERROU_DIR nomme au journal" \
+	grep -q 'ERREUR .*VERROU_DIR' "$LOG_DIR/test-verrou.log"
+# Fichier de verrou d'un autre compte (ici : sans droit d'ecriture), dans
+# un dossier correct. Sans objet en root (ecriture toujours permise).
+if [ "$(id -u)" -ne 0 ]; then
+	mkdir -p "$TMP/verrou-autre" && : >"$TMP/verrou-autre/maintenance-test-autre.lock"
+	chmod 444 "$TMP/verrou-autre/maintenance-test-autre.lock"
+	VERROU_DIR="$TMP/verrou-autre" bash -c '
+		SERVICE_NAME=test-autre
+		source "$ACMECHANIC_HOME/lib/common.sh"
+		prendre_verrou
+		echo "suite sans verrou" >"$VERROU_DIR/suite"' >/dev/null 2>&1
+	check "fichier de verrou d'un autre compte : arret, code 1" eq "$?" 1
+	check "fichier de verrou d'un autre compte : rien ne tourne sans verrou" \
+		not test -e "$TMP/verrou-autre/suite"
+	check "fichier de verrou d'un autre compte : cause nommee au journal" \
+		grep -q 'ERREUR .*autre compte' "$LOG_DIR/test-autre.log"
+fi
+
 echo "restore.sh : redemarrage sous le verrou des images"
 # Restauration de bout en bout d'un service Docker, depuis une copie avec
 # son propre local.conf ; le faux docker (en tete du PATH) note chaque
