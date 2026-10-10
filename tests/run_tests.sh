@@ -505,6 +505,26 @@ for gest in nala apt-get; do
 		grep -q -- ' -o Dpkg::Options::=--force-confdef' <<<"$ligne"
 done
 
+echo "verrou des images : ouverture en echec apres le controle"
+# Le fichier est lisible, mais son ouverture sur le descripteur 8 echoue
+# (limite de descripteurs) : meme classe que le fichier qui disparait
+# entre le controle et l'ouverture. Attendu : « non obtenu » (75), donc
+# un redemarrage qui part quand meme, sans verrou.
+rm -f "$TMP/compose.log"
+out="$(bash -c '
+	SERVICE_NAME=test-ouverture
+	source "$ACMECHANIC_HOME/lib/common.sh"
+	: >"$VERROU_DIR/maintenance-docker-prune.lock"
+	compose() { echo "$*" >>"$1/compose.log"; }
+	exec 3>&- 4>&- 5>&- 6>&- 7>&-   # descripteurs legues par le lanceur
+	ulimit -n 8
+	avec_verrou_images partage true 2>/dev/null; echo "rc=$?"
+	demarrer_service "$1" svc >/dev/null 2>&1; echo "demarrage=$?"' _ "$TMP")"
+check "ouverture du verrou en echec : code 75" grep -qx 'rc=75' <<<"$out"
+check "ouverture du verrou en echec : le service est relance" grep -qx 'demarrage=0' <<<"$out"
+check "ouverture du verrou en echec : relance sans verrou" \
+	grep -qE ' up -d svc$' "$TMP/compose.log"
+
 echo "verrou : dossier des verrous absent"
 out="$(VERROU_DIR="$TMP/absent" bash -c '
 	SERVICE_NAME=test-verrou

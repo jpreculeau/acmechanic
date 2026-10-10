@@ -1284,12 +1284,18 @@ avec_verrou_images() {
 		return 2 ;;
 	esac
 	shift
-	[ -e "$fichier" ] || : >>"$fichier"
-	[ -r "$fichier" ] || {
-		echo "Verrou des images Docker impossible a creer ou illisible ($fichier)" >&2
-		return "$VERROU_NON_OBTENU"
-	}
+	# `true`, pas `:` : sous bash --posix, la redirection en echec d'une
+	# commande speciale tuerait le shell appelant (dossier absent).
+	[ -e "$fichier" ] || true >>"$fichier"
 	(
+		# Ouverture ICI, et pas apres un controle prealable : un fichier
+		# qui disparait entre les deux ferait rendre 1 au lieu de
+		# VERROU_NON_OBTENU. `command` : sous bash --posix, un exec en
+		# echec ne tue pas le sous-shell avant le message.
+		if ! { command exec 8<"$fichier"; } 2>/dev/null; then
+			echo "Verrou des images Docker impossible a creer ou illisible ($fichier)" >&2
+			exit "$VERROU_NON_OBTENU"
+		fi
 		if ! flock -n "$mode" 8; then
 			echo "En attente du verrou des images Docker ($nom, ${delai}s au plus)..." >&2
 			flock "$mode" -w "$delai" 8 || {
@@ -1298,7 +1304,7 @@ avec_verrou_images() {
 			}
 		fi
 		"$@" 8>&-
-	) 8<"$fichier"
+	)
 }
 
 # tirer_service <projet> <service> : pull sous verrou partage.
