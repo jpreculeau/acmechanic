@@ -375,12 +375,22 @@ sans_marqueurs() {
 # fin_de_sortie <service> : les 20 dernieres lignes de sa sortie, a
 # l'ecran ET au journal : le fichier <service>.sortie est ecrase au
 # passage suivant, le journal garde la trace d'un echec.
+# Plus haut, les seules lignes ERREUR : l'etape en echec peut etre loin
+# de la fin, les etapes suivantes ayant tourne. « [...] » marque un saut.
 # Au journal, sans sequences de terminal (sans_sequences).
 fin_de_sortie() {
 	local extrait
-	# tr : un octet nul ferait protester bash a la substitution.
-	extrait="$(tail -n 20 "$DOSSIER_SORTIES/$1.sortie" 2>/dev/null | tr -d '\0' |
-		sans_marqueurs | sed 's/^/    /')"
+	# tr : un octet nul ferait protester bash a la substitution. 2>/dev/null
+	# avant <, pour taire aussi un fichier absent.
+	extrait="$(tr -d '\0' 2>/dev/null <"$DOSSIER_SORTIES/$1.sortie" |
+		LC_ALL=C awk -v m=$'\x1fERREUR\x1f' '{ l[NR] = $0 } END {
+			for (i = 1; i <= NR; i++)
+				if (i > NR - 20 || index(l[i], m) == 1) {
+					if (i > der + 1) print "[...]"
+					print l[i]
+					der = i
+				}
+		}' | sans_marqueurs | sed 's/^/    /')"
 	[ -n "$extrait" ] || return 0
 	printf '%s\n' "$extrait"
 	printf '%s\n' "$extrait" | sans_sequences >>"$LOG_FILE"

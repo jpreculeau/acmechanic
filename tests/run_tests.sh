@@ -617,7 +617,7 @@ check "tache anticipee : son etape est au journal" \
 # fichier <service>.sortie est ecrase au passage suivant).
 SK="$TMP/services-ko"
 mkdir -p "$SK/enpanne"
-printf '#!/bin/bash\nSERVICE_NAME=enpanne\nsource "${ACMECHANIC_HOME}/lib/common.sh"\nprintf "\\033]0;titre\\007\\033[31mtrace-de-la-panne\\033(B\\033[0m\\n"\nprintf "octet\\0nul\\n"\nexit 1\n' \
+printf '#!/bin/bash\nSERVICE_NAME=enpanne\nsource "${ACMECHANIC_HOME}/lib/common.sh"\nprintf "\\037ERREUR\\037etape-en-panne\\n"\nfor i in $(seq 25); do echo "remplissage-$i"; done\nprintf "\\033]0;titre\\007\\033[31mtrace-de-la-panne\\033(B\\033[0m\\n"\nprintf "octet\\0nul\\n"\nexit 1\n' \
 	>"$SK/enpanne/enpanne.sh"
 chmod +x "$SK/enpanne/enpanne.sh"
 # Bouchons en tete du PATH : ni sudo, ni Docker, ni reseau (un passage
@@ -638,6 +638,15 @@ check "service en echec : le sudo appele est le bouchon" grep -q "^$BK/sudo " "$
 check "service en echec : le docker appele est le bouchon" grep -q "^$BK/docker " "$BK/appels"
 check "service en echec : fin de sa sortie au journal, sans sequences de terminal" \
 	grep -q '^    trace-de-la-panne$' "$LOG_DIR/acmechanic.log"
+# L'etape en echec, loin de la fin (25 lignes apres elle), reste dans
+# l'extrait ; les lignes sautees sont marquees.
+check "service en echec : etape en echec gardee, loin de la fin" \
+	grep -q '^    ERREUR : etape-en-panne$' "$LOG_DIR/acmechanic.log"
+check "service en echec : saut marque" grep -q '^    \[\.\.\.\]$' "$LOG_DIR/acmechanic.log"
+check "service en echec : lignes hors des 20 dernieres sautees" \
+	not grep -q '^    remplissage-7$' "$LOG_DIR/acmechanic.log"
+check "service en echec : 20 dernieres lignes gardees" \
+	grep -q '^    remplissage-8$' "$LOG_DIR/acmechanic.log"
 check "service en echec : octet nul retire" grep -q '^    octetnul$' "$LOG_DIR/acmechanic.log"
 check "service en echec : octet nul retire avant bash, sans avertissement" \
 	not grep -qiE 'null byte|octet nul' "$TMP/enpanne.err"
