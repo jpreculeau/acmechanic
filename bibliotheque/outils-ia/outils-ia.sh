@@ -33,6 +33,7 @@ if [[ -z "${IA_NPM+x}" ]]; then IA_NPM=(@openai/codex @google/gemini-cli); fi
 : "${OLLAMA_MAJ:=signaler}"        # oui = installer la nouvelle version (sudo)
 : "${OLLAMA_MODELES_MAJ:=non}"
 : "${HERMES_HOME:=$HOME/.hermes}"
+: "${CLAUDE_REPRISE_ATTENTE:=30}"  # s avant le second essai de claude update
 # -------------------------------------------------------------------------------
 
 titre "OUTILS D'IA"
@@ -56,9 +57,20 @@ maj_commande() {
 }
 
 # --- Claude Code -----------------------------------------------------------------
+# reprise <attente> <commande...> : un second essai apres <attente> s.
+# claude update echoue par moments sans cause durable (« Unable to fetch
+# latest version from npm registry ») ; un nouvel essai suffit souvent.
+reprise() {
+	local attente="$1"
+	shift
+	"$@" && return 0
+	log "Echec de « $* », nouvel essai dans ${attente} s."
+	sleep "$attente"
+	"$@"
+}
 if present claude; then
 	TROUVE=oui
-	maj_commande claude claude --version -- claude update
+	maj_commande claude claude --version -- reprise "$CLAUDE_REPRISE_ATTENTE" claude update
 fi
 
 # --- CLI npm ---------------------------------------------------------------------

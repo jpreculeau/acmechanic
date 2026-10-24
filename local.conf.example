@@ -50,6 +50,7 @@
 # DEPOTS_GIT=("$HOME/acmefrag" "$HOME/outils/mon-script")
 # IA_OUTILS="claude npm uv pipx pi hermes ollama"
 # IA_NPM=(@openai/codex @google/gemini-cli)
+# CLAUDE_REPRISE_ATTENTE=30        # s avant le second essai de « claude update » en échec
 # OLLAMA_MAJ=oui                    # installer les nouvelles versions d'Ollama (sinon : signalées)
 # SESSION_GRAPHIQUE_PIP_GIT=(nwg-panel)  # barre installée depuis git, avec correctifs :
 # NWG_PANEL_SRC="$HOME/src/nwg-panel"

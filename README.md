@@ -134,6 +134,7 @@ Ne modifiez pas `config.sh` : surchargez ses variables dans **`local.conf`** (ig
 | `BACKUP_ROOT` | `~/backups` | Racine des sauvegardes |
 | `BACKUP_GARDER` | `5` | Archives conservées par service |
 | `LIMITE_CPU` / `LIMITE_RAM_SOUPLE` / `LIMITE_RAM_DURE` | `200%` / `1G` / `2G` | Bornes du cgroup de chaque service |
+| `CLAUDE_REPRISE_ATTENTE` | `30` | `outils-ia` : attente (s) avant le second et dernier essai d'un `claude update` en échec (registre npm parfois injoignable) |
 | `FLATPAK_SAUVEGARDES` | `()` | `nom:identifiant.flatpak` à sauvegarder |
 | `SERVICES_CONNUS` + `config_service()` | vides | Services restaurables par `restore.sh` |
 

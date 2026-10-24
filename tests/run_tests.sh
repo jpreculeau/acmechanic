@@ -122,6 +122,19 @@ printf '#!/bin/sh\ncase "$1" in --version) cat "%s/v" ;; update) echo 2.0 >"%s/v
 chmod +x "$B/claude"; echo 1.0 >"$B/v"
 out="$(PATH="$B:$PATH" IA_OUTILS=claude "$ROOT/bibliotheque/outils-ia/outils-ia.sh" 2>&1)"; rc=$?
 check "outils-ia : claude mis a jour" eq "$rc/$(cat "$B/v")" "0/2.0"
+# claude update en echec une fois (registre npm injoignable) : second
+# essai, etape reussie ; en echec deux fois : etape en echec, sans
+# troisieme essai.
+printf '#!/bin/sh\ncase "$1" in --version) cat "%s/v" ;; update) echo x >>"%s/essais"; [ "$(wc -l <"%s/essais")" -ge "$(cat "%s/ok_au")" ] && echo 2.0 >"%s/v" ;; esac\n' \
+	"$B" "$B" "$B" "$B" "$B" >"$B/claude"
+echo 1.0 >"$B/v"; : >"$B/essais"; echo 2 >"$B/ok_au"
+PATH="$B:$PATH" IA_OUTILS=claude CLAUDE_REPRISE_ATTENTE=0 "$ROOT/bibliotheque/outils-ia/outils-ia.sh" >/dev/null 2>&1; rc=$?
+check "outils-ia : claude update en echec une fois, second essai reussi" \
+	eq "$rc/$(wc -l <"$B/essais")/$(cat "$B/v")" "0/2/2.0"
+echo 1.0 >"$B/v"; : >"$B/essais"; echo 9 >"$B/ok_au"
+PATH="$B:$PATH" IA_OUTILS=claude CLAUDE_REPRISE_ATTENTE=0 "$ROOT/bibliotheque/outils-ia/outils-ia.sh" >/dev/null 2>&1; rc=$?
+check "outils-ia : claude update en echec deux fois, etape en echec" \
+	eq "$([ "$rc" -ne 0 ] && echo echec)/$(wc -l <"$B/essais")" "echec/2"
 out="$(ACMEFRAG_DOSSIER="$TMP/absent" "$ROOT/bibliotheque/acmefrag/acmefrag.sh" 2>&1)"; rc=$?
 check "acmefrag : absent => ignore, code 0" eq "$rc" "0"
 
