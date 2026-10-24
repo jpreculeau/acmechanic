@@ -9,6 +9,15 @@ Ce qui est prévu, par version. Les priorités peuvent bouger : les issues et PR
 - Auto-mise à jour d'Acmechanic en fin de run (`ACMECHANIC_AUTO_MAJ`)
 - Affichage : cadres rangés par durée réelle, points d'attention, bilan par service, versions façon nala, français / anglais
 
+## 🎯 1.2 — code en anglais
+
+**Objectif** : un code lisible par tout contributeur, avant le chantier multi-distributions (1.5), qui touchera tout le code système.
+
+- [ ] Identifiants (fonctions, variables, fichiers) en anglais ; les réglages de `local.conf` gardent leurs anciens noms, toujours lus
+- [ ] Commentaires en français et en anglais
+- [ ] Messages du journal et des services dans les catalogues de langue
+- [ ] Documentation en anglais (README, CONTRIBUTING), la version française gardée
+
 ## 🎯 1.5 — au-delà de Debian
 
 **Objectif** : la même commande sur les grandes familles Linux.
@@ -32,5 +41,4 @@ Ce qui est prévu, par version. Les priorités peuvent bouger : les issues et PR
 - [ ] **Notifications** en fin de run : ntfy, Gotify, e-mail (uniquement si échec ou action à faire)
 - [ ] **Installation du minuteur** : `acmechanic --installer-minuteur` (timer systemd utilisateur, heure réglable)
 - [ ] **Registres hors Docker Hub** (ghcr.io, Codeberg, lscr.io) : digest distant sans pull, comme pour Docker Hub
-- [ ] Messages du journal et des services dans les catalogues de langue ; documentation en anglais
 - [ ] Autres langues (catalogues `locale/<code>.sh` : contributions bienvenues)
