@@ -29,7 +29,7 @@
 - ⚡ **Parallèle et bridé** : un cgroup `systemd-run --user` par service (CPU, RAM, pids) + `nice`/`ionice`
 - 🖥️ **Tableau fixe** : une case par service, rangées du plus rapide (en haut à gauche) au plus lent d'après les durées réelles du passage précédent ; au moins 6 lignes de détail par cadre (`ACMECHANIC_LIGNES_MIN`) avec un ascenseur quand tout ne tient pas (molette, flèches, Page préc./suiv., Début/Fin ; le suivi automatique reprend après 20 s ou avec Fin) : les services terminés, en haut, sont poussés pour laisser voir ceux qui travaillent encore ; une dernière rangée incomplète prend toute la largeur ; lignes colorées comme à l'écran (sans horodatage), icônes Nerd Font, 16 couleurs du thème du terminal
 - 🔔 **Points d'attention** : toute action à faire par vous (micrologiciel, redémarrage, mise à jour non appliquée…) est regroupée en fin de passage, avec la commande à lancer — `point_attention` pour vos propres services
-- ▶️ **Actions proposées** : en fin de passage, Acmechanic propose de lancer chaque commande (non par défaut, redémarrage en dernier) ; lancé par cron, `acmechanic --actions` les repropose plus tard
+- ▶️ **Actions proposées** : en fin de passage, Acmechanic propose de lancer chaque commande, avec le constat, le pourquoi (ce que l'on risque à ne rien faire) et l'attendu (ce que fait la commande) ; non par défaut, redémarrage en dernier ; lancé par cron, `acmechanic --actions` les repropose plus tard
 - 🔢 **Bilan lisible** : services mis à jour / inchangés / en échec, total des étapes, et versions dont seule la partie qui change est mise en évidence (façon nala)
 - 🌍 **Multilingue** : français et anglais (textes « dessin animé » compris), autres langues par simple catalogue
 - 🛡️ **Robuste** : verrous `flock`, délais par étape, watchdog anti-fige, Ctrl+C / fermeture de terminal qui arrêtent proprement tout l'arbre
@@ -94,7 +94,7 @@ Le code de sortie est le **nombre d'étapes en échec** (0 = tout va bien) : pra
 
 La [bibliothèque](bibliotheque/README.md) fournit une vingtaine de services prêts à l'emploi : services Docker (Jellyfin, Plex, *arr, Syncthing, Vaultwarden, Forgejo, Open WebUI…) avec leur `docker-compose.yml` modèle, et maintenance de la machine (dépôts git, outils d'IA, micrologiciel, nettoyage, AcmeFrag, Flatpak). On les active par un lien dans `services/`, et on les règle dans `local.conf` selon une convention unique : `<NOM>_PROJET`, `<NOM>_DONNEES`, `<NOM>_URL`, `<NOM>_CANAL`.
 
-Un service maison est un script `services/<nom>/<nom>.sh`, exécutable, qui source `lib/service.sh` (ou `lib/common.sh`). Le plus simple : partir de [`bibliotheque/_modele`](bibliotheque/_modele/). Briques disponibles : `docker_standard`, `point_attention "message" "commande"`, `run_etape "libellé" <délai> cmd...`, `ignorer_etape`, `log`/`ok`/`warn`/`err`, `enregistrer_version`, `creer_sauvegarde`.
+Un service maison est un script `services/<nom>/<nom>.sh`, exécutable, qui source `lib/service.sh` (ou `lib/common.sh`). Le plus simple : partir de [`bibliotheque/_modele`](bibliotheque/_modele/). Briques disponibles : `docker_standard`, `point_attention "message" "commande" "pourquoi" "attendu"`, `run_etape "libellé" <délai> cmd...`, `ignorer_etape`, `log`/`ok`/`warn`/`err`, `enregistrer_version`, `creer_sauvegarde`.
 
 Pour imposer un ordre : `ln -s ../services/a/a.sh ordre.d/10-a.sh` (les services liés passent d'abord, dans l'ordre des préfixes).
 

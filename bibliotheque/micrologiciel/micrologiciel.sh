@@ -41,7 +41,9 @@ if command -v rpi-eeprom-update >/dev/null 2>&1; then
 		;;
 	1)
 		point_attention "EEPROM : mise a jour disponible (${actuelle%% (*} -> ${derniere%% (*})" \
-			"sudo rpi-eeprom-update -a && sudo reboot"
+			"sudo rpi-eeprom-update -a && sudo reboot" \
+			"corrections du chargeur de demarrage du Raspberry Pi non appliquees" \
+			"programme la mise a jour, puis redemarre aussitot : l'EEPROM est ecrite au demarrage"
 		enregistrer_version "eeprom" "${actuelle%% (*}" "${actuelle%% (*}"
 		;;
 	*)
@@ -68,7 +70,9 @@ if command -v fwupdmgr >/dev/null 2>&1; then
 	0)
 		grep -E '│|├|└|New version|Nouvelle version' <<<"$sortie" | head -20 | sed 's/^/    /'
 		point_attention "fwupd : micrologiciel(s) a mettre a jour (detail : fwupdmgr get-updates)" \
-			"sudo fwupdmgr update"
+			"sudo fwupdmgr update" \
+			"micrologiciels de peripheriques en retard (correctifs de securite possibles)" \
+			"flashe les peripheriques listes par fwupdmgr get-updates ; peut demander un redemarrage"
 		;;
 	2) inchanger_etape "fwupd" "aucune mise a jour" ;;
 	*)

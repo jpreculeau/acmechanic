@@ -420,22 +420,24 @@ ajouter_compteur() {
 }
 
 # --- Points d'attention ---
-# point_attention <message> [commande] : une action A FAIRE PAR
+# point_attention <message> [commande] [pourquoi] [attendu] : une action A FAIRE PAR
 # L'UTILISATEUR (mise a jour a appliquer a la main, redemarrage...), a
 # distinguer d'un simple avertissement de deroulement (warn). Journalise
 # comme un warn, et repris a la fin :
 #   - sous Acmechanic : dans le bloc « Points d'attention » du bilan
 #     global (fichier partage ACMECHANIC_ATTENTION_FICHIER) ;
 #   - script lance seul : a la fin de son bilan (bilan_service).
+# <pourquoi> (ce que l'on risque a ne rien faire) et <attendu> (ce que fait
+# la commande, ce que l'on verra) sont montres quand l'action est proposee.
 declare -a _ATTENTION_LOCALE=()
 point_attention() {
-	local msg="$1" cmd="${2:-}" f="${ACMECHANIC_ATTENTION_FICHIER:-}"
+	local msg="$1" cmd="${2:-}" pourquoi="${3:-}" attendu="${4:-}" f="${ACMECHANIC_ATTENTION_FICHIER:-}"
 	warn "$msg${cmd:+ -> $cmd}"
 	# Separateur \x1f (US) : un message ou une commande peut contenir « | ».
-	_ATTENTION_LOCALE+=("$SERVICE_NAME"$'\x1f'"$msg"$'\x1f'"$cmd")
+	_ATTENTION_LOCALE+=("$SERVICE_NAME"$'\x1f'"$msg"$'\x1f'"$cmd"$'\x1f'"$pourquoi"$'\x1f'"$attendu")
 	[ -n "$f" ] || return 0
-	_sous_verrou "$f" sh -c 'printf "%s\037%s\037%s\n" "$1" "$2" "$3" >>"$4"' \
-		sh "$SERVICE_NAME" "$msg" "$cmd" "$f" 2>/dev/null || true
+	_sous_verrou "$f" sh -c 'printf "%s\037%s\037%s\037%s\037%s\n" "$1" "$2" "$3" "$4" "$5" >>"$6"' \
+		sh "$SERVICE_NAME" "$msg" "$cmd" "$pourquoi" "$attendu" "$f" 2>/dev/null || true
 }
 
 # rapport_attention [fichier] : affiche les points d'attention, groupes
@@ -455,7 +457,7 @@ rapport_attention() {
 	echo
 	printf ' %s%s%s %s%s\n' "$gras" "$jaune" "$icone" "$(t titre_attention)" "$raz"
 	for ligne in "${lignes[@]}"; do
-		IFS=$'\x1f' read -r nom msg cmd <<<"$ligne"
+		IFS=$'\x1f' read -r nom msg cmd _ <<<"$ligne"
 		printf '  %s%s%s %s%-14s%s %s\n' "$jaune" "$icone" "$raz" "$gras" "$nom" "$raz" "$msg"
 		[ -n "$cmd" ] && printf '  %17s%s%s %s%s\n' "" "$terne" "$fleche" "$(t attention_commande "$cmd")" "$raz"
 	done
@@ -511,7 +513,7 @@ _question() {
 # ACMECHANIC_PROPOSER : oui (defaut) | non | force (tests : reponses lues
 # sur l'entree standard, sans terminal).
 proposer_actions() {
-	local f="$1" mode="${ACMECHANIC_PROPOSER:-oui}" entree=/dev/tty ligne nom msg cmd rep code
+	local f="$1" mode="${ACMECHANIC_PROPOSER:-oui}" entree=/dev/tty ligne nom msg cmd pourquoi attendu rep code i=0
 	local -a actions=() fin=() deja=()
 	[ -s "$f" ] || return 0
 	case "$mode" in
@@ -520,7 +522,7 @@ proposer_actions() {
 	*) { [ -t 1 ] && [ -r /dev/tty ] && : </dev/tty; } 2>/dev/null || return 0 ;;
 	esac
 	while IFS= read -r ligne; do
-		IFS=$'\x1f' read -r nom msg cmd <<<"$ligne"
+		IFS=$'\x1f' read -r nom msg cmd _ <<<"$ligne"
 		[ -n "$cmd" ] || continue
 		[[ " ${deja[*]} " == *" $cmd "* ]] && continue # une commande, une fois
 		deja+=("$cmd")
@@ -535,9 +537,16 @@ proposer_actions() {
 	echo
 	printf ' %s%s%s\n' "$C_BOLD" "$(t titre_actions)" "$C_OFF"
 	for ligne in "${actions[@]}"; do
-		IFS=$'\x1f' read -r nom msg cmd <<<"$ligne"
-		[[ " ${fin[*]} " == *"$cmd"* ]] && printf '  (%s)\n' "$(t action_redemarrage)"
-		_question "$entree" "$(t question_action "$nom" "$cmd")"
+		# Ancien fichier (acmechanic --actions apres une mise a jour) :
+		# trois champs, pourquoi et attendu restent vides.
+		IFS=$'\x1f' read -r nom msg cmd pourquoi attendu _ <<<"$ligne"
+		i=$((i + 1))
+		echo
+		printf '  %s%s%s\n' "$C_BOLD" "$(t action_entete "$i" "${#actions[@]}" "$nom" "$msg")" "$C_OFF"
+		[ -n "$pourquoi" ] && printf '       %s\n' "$(t action_pourquoi "$pourquoi")"
+		[ -n "$attendu" ] && printf '       %s\n' "$(t action_attendu "$attendu")"
+		[[ " ${fin[*]} " == *"$cmd"* ]] && printf '       (%s)\n' "$(t action_redemarrage)"
+		_question "$entree" "$(t question_action "$cmd")"
 		rep="$REPONSE"
 		if [ -z "$rep" ] || [[ "${MSG[reponses_oui]}" != *"${rep:0:1}"* ]]; then
 			continue

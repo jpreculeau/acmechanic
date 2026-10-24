@@ -78,7 +78,9 @@ relance_proposee() {
 	[ -n "$pid" ] || return 0
 	args="$(ps -o args= -p "$pid" | sed "s#^.*bin/$nom#$nom#")"
 	point_attention "$nom : nouvelle version installee, celle en cours tourne encore l'ancienne" \
-		"pkill -f 'bin/$nom( |\$)'; sleep 1; setsid -f $args >/dev/null 2>&1"
+		"pkill -f 'bin/$nom( |\$)'; sleep 1; setsid -f $args >/dev/null 2>&1" \
+		"l'instance en cours garde l'ancienne version jusqu'a sa relance" \
+		"arrete puis relance $nom ; il disparait une seconde"
 }
 
 # restaurer <nom> <site> <sauvegarde> : remet la version d'avant.
@@ -138,7 +140,9 @@ maj_pip_git() {
 		git -C "$arbre" merge --abort 2>/dev/null
 		git -C "$src" worktree remove --force "$arbre"
 		point_attention "$nom : le correctif $b ne s'applique plus sur $ref (conflit), version actuelle conservee" \
-			"cd $src && git checkout --detach $ref && git merge $b"
+			"cd $src && git checkout --detach $ref && git merge $b" \
+			"tant que le correctif ne s'applique plus, $nom reste sur sa version actuelle" \
+			"laisse $src en fusion arretee sur le conflit (echec affiche normal), a resoudre a la main ; la version installee ne change pas"
 		return
 	done
 

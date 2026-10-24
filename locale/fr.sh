@@ -40,8 +40,11 @@ MSG=(
 	[attention_commande]="à lancer : %s"
 	# --- Actions proposees en fin de passage ---
 	[titre_actions]="Actions proposées"
-	[question_action]="%s : lancer « %s » ? [o/N] "
+	[question_action]="Lancer « %s » ? [o/N] "
 	[reponses_oui]="oOyY"
+	[action_entete]="%d/%d  %s — %s"
+	[action_pourquoi]="Pourquoi : %s"
+	[action_attendu]="Attendu  : %s"
 	[action_ok]="Fait."
 	[action_echec]="Échec (code %d)."
 	[action_plus_tard]="Pour y revenir plus tard : acmechanic --actions"
@@ -60,6 +63,10 @@ MSG=(
 	[sauvegardes]="%s de sauvegardes"
 	# --- Points d'attention d'Acmechanic lui-meme ---
 	[att_redemarrage]="Redémarrage nécessaire pour terminer les mises à jour (%s)"
+	[att_redemarrage_pourquoi]="le noyau et les bibliothèques mis à jour ne servent qu'après un redémarrage"
+	[att_redemarrage_attendu]="redémarrage immédiat : services et session coupés le temps du démarrage"
+	[att_auto_maj_pourquoi]="les correctifs d'Acmechanic ne servent pas tant que sa copie n'est pas à jour"
+	[att_auto_maj_attendu]="avance rapide de la copie, active au prochain lancement ; refus sans rien toucher si elle a divergé ou si des modifications locales touchent les mêmes fichiers"
 	[att_auto_maj]="Nouvelle version d'Acmechanic disponible (%d commit(s)), non appliquée : %s"
 	[raison_modifs]="modifications locales"
 	[raison_divergent]="historique local divergent"

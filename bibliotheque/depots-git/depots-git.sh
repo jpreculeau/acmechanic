@@ -62,12 +62,16 @@ maj_depot() {
 	fi
 	if [ "$DEPOTS_APPLIQUER" != oui ]; then
 		point_attention "$nom : $n commit(s) disponible(s), non appliques (DEPOTS_APPLIQUER=non)" \
-			"git -C $depot pull --ff-only"
+			"git -C $depot pull --ff-only" \
+			"le depot reste en retard sur sa branche suivie" \
+			"avance rapide du depot ; refus sans rien toucher s'il a diverge ou si des modifications locales touchent les memes fichiers"
 		return
 	fi
 	if [ -n "$(git -C "$depot" status --porcelain --untracked-files=no)" ]; then
 		point_attention "$nom : $n commit(s) disponible(s), non appliques : modifications locales" \
-			"git -C $depot status"
+			"git -C $depot status" \
+			"la mise a jour automatique est bloquee par des modifications locales" \
+			"affiche les fichiers modifies, sans rien changer ; a committer ou ecarter vous-meme"
 		return
 	fi
 	if etape "$nom : avance rapide ($n commit(s))" 120 git -C "$depot" merge -q --ff-only '@{u}'; then
@@ -88,12 +92,16 @@ verifier_chezmoi() {
 	etape "chezmoi : recherche de nouveautes" 90 git -C "$source" fetch -q || return
 	n="$(retard "$source")"
 	if [ "$n" -gt 0 ]; then
-		point_attention "chezmoi : $n commit(s) en attente dans le depot source" "chezmoi update"
+		point_attention "chezmoi : $n commit(s) en attente dans le depot source" "chezmoi update" \
+			"les fichiers de la machine ne suivent pas les derniers commits de la source" \
+			"tire le depot source puis applique ses fichiers (chezmoi demande avant d'ecraser un fichier modifie)"
 	else
 		inchanger_etape "chezmoi" "depot source a jour"
 	fi
 	if [ -n "$(chezmoi status 2>/dev/null)" ]; then
-		point_attention "chezmoi : des fichiers different de la source" "chezmoi status"
+		point_attention "chezmoi : des fichiers different de la source" "chezmoi status" \
+			"la machine et la source divergent : un chezmoi apply alignerait ces fichiers sur la source (en demandant pour un fichier modifie a la main)" \
+			"liste les fichiers en ecart, sans rien changer"
 	fi
 }
 

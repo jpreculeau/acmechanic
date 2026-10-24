@@ -111,10 +111,12 @@ echo "micrologiciel, nettoyage, outils-ia, acmefrag (bouchons)"
 B="$TMP/bouchons"; mkdir -p "$B"
 printf '#!/bin/sh\necho "BOOTLOADER: update available"\necho "   CURRENT: jeu. 1 (1)"\necho "    LATEST: ven. 2 (2)"\nexit 1\n' >"$B/rpi-eeprom-update"
 chmod +x "$B/rpi-eeprom-update"
-PATH="$B:$PATH" "$ROOT/bibliotheque/micrologiciel/micrologiciel.sh" >/dev/null 2>&1; rc=$?
+PATH="$B:$PATH" ACMECHANIC_ATTENTION_FICHIER="$TMP/att-micro" "$ROOT/bibliotheque/micrologiciel/micrologiciel.sh" >/dev/null 2>&1; rc=$?
 out="$(cat "$LOG_DIR/micrologiciel.log")"
 check "micrologiciel : EEPROM signalee sans echec" eq "$rc" "0"
 check "micrologiciel : point d'attention avec la commande" grep -q 'rpi-eeprom-update -a' <<<"$out"
+check "micrologiciel : point d'attention avec pourquoi et attendu" \
+	eq "$(awk -F '\037' '$2 ~ /^EEPROM/ && $4 != "" && $5 != "" {n++} END {print n+0}' "$TMP/att-micro")" "1"
 L="$TMP/lg"; mkdir -p "$L/foo" "$L/nettoyage"
 head -c 3145728 /dev/zero >"$L/foo/foo.log"; head -c 3145728 /dev/zero >"$L/foo/autre.log"
 LOG_DIR="$L/nettoyage" NETTOYAGE_DOCKER=non NETTOYAGE_JOURNAL=non NETTOYAGE_PAQUETS=non \
@@ -291,13 +293,16 @@ echo "points d'attention"
 out="$(bash -c '
 	SERVICE_NAME=att; source "$ACMECHANIC_HOME/lib/common.sh"
 	export ACMECHANIC_ATTENTION_FICHIER="'"$TMP"'/att"
-	point_attention "EEPROM a mettre a jour" "sudo rpi-eeprom-update -a"
+	point_attention "EEPROM a mettre a jour" "sudo rpi-eeprom-update -a" "correctifs non appliques" "flash au prochain demarrage"
 	cat "$ACMECHANIC_ATTENTION_FICHIER"
 ' 2>/dev/null | tail -1)"
-check "point_attention : fichier partage (service, message, commande)" eq "$(tr '\037' '|' <<<"$out")" "att|EEPROM a mettre a jour|sudo rpi-eeprom-update -a"
+check "point_attention : fichier partage (service, message, commande, pourquoi, attendu)" eq "$(tr '\037' '|' <<<"$out")" "att|EEPROM a mettre a jour|sudo rpi-eeprom-update -a|correctifs non appliques|flash au prochain demarrage"
 out="$(bash -c 'SERVICE_NAME=att; source "$ACMECHANIC_HOME/lib/common.sh"; point_attention "A faire" "curl x | sh" >/dev/null; rapport_attention ""' 2>/dev/null)"
 check "rapport_attention : message et commande" grep -q 'A faire' <<<"$out"
 check "rapport_attention : commande avec | intacte" grep -qF 'curl x | sh' <<<"$out"
+out="$(bash -c 'SERVICE_NAME=att; source "$ACMECHANIC_HOME/lib/common.sh"; point_attention "A faire" "cmd-x" "risque-y" "effet-z" >/dev/null; rapport_attention ""' 2>/dev/null)"
+check "rapport_attention : commande seule, sans pourquoi ni attendu" \
+	eq "$(grep -c 'cmd-x' <<<"$out")/$(grep -c 'risque-y\|effet-z' <<<"$out")" "1/0"
 
 A="$TMP/actions"
 {
@@ -310,7 +315,7 @@ A="$TMP/actions"
 out="$(printf 'o\nn\nn\n' | ACMECHANIC_PROPOSER=force ACMECHANIC_LANGUE=fr bash -c 'SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"; proposer_actions "$1"' _ "$A" 2>/dev/null)"
 check "actions : acceptee => lancee" test -e "$TMP/fait1"
 check "actions : refusee => rien" not test -e "$TMP/fait2"
-check "actions : redemarrage propose en dernier" eq "$(grep -o 'lancer « [^»]*»' <<<"$out" | tr '\n' ';')" "lancer « touch $TMP/fait1 »;lancer « touch $TMP/fait2 »;lancer « sudo reboot »;"
+check "actions : redemarrage propose en dernier" eq "$(grep -o 'Lancer « [^»]*»' <<<"$out" | tr '\n' ';')" "Lancer « touch $TMP/fait1 »;Lancer « touch $TMP/fait2 »;Lancer « sudo reboot »;"
 out="$(ACMECHANIC_PROPOSER=oui bash -c 'SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"; proposer_actions "$1"' _ "$A" </dev/null 2>&1)"
 check "actions : rien demande hors terminal" eq "$out" ""
 printf 'svc\x1fLent\x1ftouch %s/fait3\n' "$TMP" >"$A"
@@ -318,6 +323,21 @@ out="$(sleep 2 | ACMECHANIC_DELAI_REPONSE=1 ACMECHANIC_PROPOSER=force ACMECHANIC
 check "actions : delai ecoule => reponse par defaut (non)" not test -e "$TMP/fait3"
 check "actions : delai ecoule annonce" grep -q 'Délai écoulé' <<<"$out"
 check "actions : decompte affiche dans la question" grep -qF '[  1 s]' <<<"$out"
+# Pourquoi et attendu : montres avant la question, sous l'en-tete
+# (rang, service, constat) ; absents, aucune ligne vide a leur place.
+{
+	printf 'svc\x1fConstat-un\x1ftrue\x1fRisque-un\x1fEffet-un\n'
+	printf 'svc\x1fConstat-deux\x1ftrue --deux\x1f\x1f\n'
+	printf 'autre\x1fConstat-trois\x1ftrue\x1fRisque-trois\x1fEffet-trois\n'
+} >"$A"
+out="$(printf 'n\nn\n' | ACMECHANIC_DELAI_REPONSE=0 ACMECHANIC_PROPOSER=force ACMECHANIC_LANGUE=fr bash -c 'SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"; proposer_actions "$1"' _ "$A" 2>/dev/null)"
+check "actions : en-tete avec rang, service et constat" grep -qF '1/2  svc — Constat-un' <<<"$out"
+check "actions : pourquoi puis attendu, avant la question" \
+	eq "$(grep -oE 'Pourquoi : Risque-un|Attendu  : Effet-un|Lancer « true »' <<<"$out" | tr '\n' ';')" \
+	"Pourquoi : Risque-un;Attendu  : Effet-un;Lancer « true »;"
+check "actions : meme commande, autre pourquoi => proposee une fois" not grep -q 'Constat-trois' <<<"$out"
+check "actions : sans pourquoi ni attendu, rien a leur place" \
+	eq "$(grep -A1 'Constat-deux' <<<"$out" | tail -1 | grep -c 'Lancer « true --deux »')" "1"
 
 echo "sauvegardes (lib/backup.sh)"
 out="$(bash -c '

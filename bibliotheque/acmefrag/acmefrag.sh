@@ -47,7 +47,9 @@ elif etape "AcmeFrag : recherche de nouveautes" 90 git -C "$ACMEFRAG_DOSSIER" fe
 		inchanger_etape "AcmeFrag" "a jour ($avant)"
 	elif [ -n "$(git -C "$ACMEFRAG_DOSSIER" status --porcelain --untracked-files=no)" ]; then
 		point_attention "AcmeFrag : $n commit(s) disponible(s), non appliques : modifications locales" \
-			"git -C $ACMEFRAG_DOSSIER status"
+			"git -C $ACMEFRAG_DOSSIER status" \
+			"la mise a jour automatique est bloquee par des modifications locales" \
+			"affiche les fichiers modifies, sans rien changer ; a committer ou ecarter vous-meme"
 	elif etape "AcmeFrag : mise a jour ($n commit(s))" 120 \
 		git -C "$ACMEFRAG_DOSSIER" merge -q --ff-only '@{u}'; then
 		MIS_A_JOUR=oui

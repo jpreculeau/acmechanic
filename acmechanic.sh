@@ -690,7 +690,8 @@ if [ "$faire_systeme" = true ]; then
 	# Signale un redemarrage necessaire, sans jamais le declencher.
 	if [ -f /var/run/reboot-required ]; then
 		paquets="$(tr '\n' ' ' </var/run/reboot-required.pkgs 2>/dev/null)"
-		point_attention "$(t att_redemarrage "${paquets:-?}")" "sudo reboot"
+		point_attention "$(t att_redemarrage "${paquets:-?}")" "sudo reboot" \
+			"$(t att_redemarrage_pourquoi)" "$(t att_redemarrage_attendu)"
 	fi
 	if [ "$NB_ECHEC" -gt "$echecs_avant_systeme" ]; then
 		statut_systeme=ECHEC
@@ -732,7 +733,8 @@ auto_mise_a_jour() {
 	else
 		raison="$(t raison_divergent)"
 	fi
-	point_attention "$(t att_auto_maj "$n" "$raison")" "git -C $d pull --ff-only"
+	point_attention "$(t att_auto_maj "$n" "$raison")" "git -C $d pull --ff-only" \
+		"$(t att_auto_maj_pourquoi)" "$(t att_auto_maj_attendu)"
 }
 
 # conserver_et_proposer : garde les points d'attention du passage

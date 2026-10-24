@@ -134,7 +134,9 @@ if present hermes; then
 		inchanger_etape "Hermes" "deja a jour"
 	elif [ -n "${HERMES_SESSION_ID:-}${HERMES_AGENT:-}" ]; then
 		ignorer_etape "Hermes : mise a jour" "lance depuis Hermes : la session serait coupee"
-		point_attention "Hermes : mise a jour disponible, non appliquee depuis une session Hermes" "hermes update"
+		point_attention "Hermes : mise a jour disponible, non appliquee depuis une session Hermes" "hermes update" \
+			"Hermes reste sur l'ancienne version, correctifs non appliques" \
+			"met Hermes a jour ; lance depuis une session Hermes, il la coupe"
 	else
 		maj_commande hermes hermes --version -- hermes update --yes
 	fi
@@ -185,12 +187,16 @@ if present ollama; then
 		enregistrer_version "ollama" "$locale" "$locale"
 	elif [ "$OLLAMA_MAJ" != oui ]; then
 		point_attention "Ollama : $locale installee, $derniere publiee (OLLAMA_MAJ=oui pour l'appliquer)" \
-			"curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=$derniere sh"
+			"curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=$derniere sh" \
+			"les correctifs de la version publiee ne sont pas installes" \
+			"installeur officiel (sudo) : remplace le binaire et redemarre le service ollama (modeles charges coupes) ; peut installer des pilotes GPU"
 		enregistrer_version "ollama" "$locale" "$locale"
 	elif ! sudo_disponible; then
 		ignorer_etape "Ollama : mise a jour" "sudo indisponible sans mot de passe"
 		point_attention "Ollama : $locale installee, $derniere publiee" \
-			"curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=$derniere sh"
+			"curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=$derniere sh" \
+			"les correctifs de la version publiee ne sont pas installes" \
+			"installeur officiel (sudo) : remplace le binaire et redemarre le service ollama (modeles charges coupes) ; peut installer des pilotes GPU"
 	else
 		maj_ollama "$locale" "$derniere"
 	fi
