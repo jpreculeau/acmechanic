@@ -3,10 +3,19 @@
 # Usage : tests/run_tests.sh
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PASS=0 FAIL=0
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+# Les tests tournent sur une copie du depot, sans les reglages ni les
+# services de la machine (local.conf, services/, ordre.d/) : ceux d'un
+# clone en service primeraient sur l'environnement des tests (local.conf
+# l'emporte sur l'environnement), et ses services seraient a portee.
+SOURCE="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$TMP/acmechanic"
+mkdir -p "$ROOT"
+tar -C "$SOURCE" --exclude=./.git --exclude=./local.conf --exclude=./ordre.d \
+	--exclude='./services/*' -cf - . | tar -xf - -C "$ROOT" ||
+	{ echo "Copie du depot impossible dans $ROOT : tests arretes." >&2; exit 1; }
 
 check() {  # check "description" commande...
 	local desc="$1"; shift
@@ -22,6 +31,11 @@ export ACMECHANIC_HOME="$ROOT"
 # Jamais le /etc/acmechanic.conf de la machine : un SERVICES_EXTRA_DIRS
 # y ferait decouvrir de vrais services par les passages des tests.
 export ACMECHANIC_CONF_SYSTEME="$TMP/aucun-conf-systeme"
+
+echo "isolement"
+check "copie du depot : ni local.conf, ni services, ni ordre.d" \
+	eq "$(find "$ROOT/services" -mindepth 1 | wc -l)/$(test -e "$ROOT/local.conf" && echo oui)$(test -e "$ROOT/ordre.d" && echo oui)" "0/"
+check "copie du depot : le code y est" test -x "$ROOT/acmechanic.sh"
 
 echo "syntaxe"
 for f in "$ROOT"/acmechanic.sh "$ROOT"/restore.sh "$ROOT"/config.sh "$ROOT"/lib/*.sh \
