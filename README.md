@@ -122,6 +122,7 @@ Ne modifiez pas `config.sh` : surchargez ses variables dans **`local.conf`** (ig
 
 | Variable | Défaut | Rôle |
 |---|---|---|
+| `ACMECHANIC_CONF_SYSTEME` | `/etc/acmechanic.conf` | Fichier de réglages système ; variable d'environnement seulement (il est lu avant `local.conf`) |
 | `SERVICES_DIR` | `<acmechanic>/services` | Dossier scanné (`<nom>/<nom>.sh`) |
 | `SERVICES_EXTRA_DIRS` | `()` | Dossiers scannés en plus |
 | `ORDRE_DIR` | `<acmechanic>/ordre.d` | Liens `NN-<nom>.sh` imposant l'ordre |

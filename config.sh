@@ -20,7 +20,11 @@ _CONFIG_SH_LOADED=1
 : "${ACMECHANIC_HOME:=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 
 # --- Surcharges optionnelles (chargées AVANT les défauts) --------------------
-for _conf in /etc/acmechanic.conf "${ACMECHANIC_HOME}/local.conf"; do
+# ACMECHANIC_CONF_SYSTEME : autre fichier système, ou aucun (les tests le
+# détournent : un SERVICES_EXTRA_DIRS de la machine y ferait découvrir et
+# lancer de vrais services).
+: "${ACMECHANIC_CONF_SYSTEME:=/etc/acmechanic.conf}"
+for _conf in "$ACMECHANIC_CONF_SYSTEME" "${ACMECHANIC_HOME}/local.conf"; do
 	# shellcheck source=/dev/null
 	[[ -r "$_conf" ]] && source "$_conf"
 done

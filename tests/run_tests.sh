@@ -19,6 +19,9 @@ eq() { [[ "$1" == "$2" ]] || { printf '       attendu [%s] obtenu [%s]\n' "$2" "
 export LC_ALL=C.UTF-8 NO_COLOR=1 ACMECHANIC_TABLEAU=non LIMITES_RESSOURCES=non
 export LOG_DIR="$TMP/logs" BACKUP_ROOT="$TMP/backups" CACHE_REGISTRE_DIR="$TMP/cache" VERROU_DIR="$TMP"
 export ACMECHANIC_HOME="$ROOT"
+# Jamais le /etc/acmechanic.conf de la machine : un SERVICES_EXTRA_DIRS
+# y ferait decouvrir de vrais services par les passages des tests.
+export ACMECHANIC_CONF_SYSTEME="$TMP/aucun-conf-systeme"
 
 echo "syntaxe"
 for f in "$ROOT"/acmechanic.sh "$ROOT"/restore.sh "$ROOT"/config.sh "$ROOT"/lib/*.sh \
@@ -198,6 +201,11 @@ val="$(env -u BACKUP_ROOT ACMECHANIC_HOME="$TMP/home" bash -c \
 check "local.conf surcharge les defauts" eq "$val" "42 demo 1800"
 val="$(ACMECHANIC_HOME="$ROOT" bash -c 'source "$ACMECHANIC_HOME/config.sh"; config_service x type')"
 check "config_service par defaut : vide" eq "$val" ""
+# Fichier systeme : celui de ACMECHANIC_CONF_SYSTEME, lu avant local.conf.
+echo 'DELAI_SYSTEME=77; DELAI_SERVICE=99' >"$TMP/conf-systeme"
+val="$(ACMECHANIC_CONF_SYSTEME="$TMP/conf-systeme" ACMECHANIC_HOME="$TMP/home" bash -c \
+	'source "$ACMECHANIC_HOME/config.sh"; echo "$DELAI_SERVICE $DELAI_SYSTEME"')"
+check "fichier systeme : ACMECHANIC_CONF_SYSTEME lu, local.conf prime" eq "$val" "42 77"
 
 echo "affichage (lib/tableau.sh)"
 # shellcheck source=../lib/tableau.sh
