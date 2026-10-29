@@ -31,7 +31,7 @@ Images hors Docker Hub (Forgejo sur Codeberg, Open WebUI sur ghcr.io) : l'image 
 | [`session-graphique`](session-graphique/) | Gestionnaire de fenêtres (Hyprland, Sway, labwc, Wayfire, niri : version, greffons `hyprpm`) ; barre et outils installés par pip depuis git **avec vos correctifs** (branches fusionnées, conflits connus rejoués par `git rerere`), copie de sécurité et retour arrière ; relance de la barre proposée | installer si un correctif ne s'applique plus : rien ne change, point d'attention |
 | [`micrologiciel`](micrologiciel/) | Signale les mises à jour de l'EEPROM du Raspberry Pi et des micrologiciels LVFS (`fwupd`) | flasher quoi que ce soit : la commande à lancer vous est donnée |
 | [`nettoyage`](nettoyage/) | Images Docker sans étiquette, cache de construction, journal systemd, cache des paquets, journaux d'Acmechanic trop gros, vieilles vignettes | toucher aux volumes Docker, aux conteneurs arrêtés, à vos données |
-| [`acmefrag`](acmefrag/) | Met à jour [AcmeFrag](https://github.com/jpreculeau/AcmeFrag), lance ses tests, mesure la fragmentation **sans modifier** (`--dry-run`) | défragmenter : c'est long, et ça reste dans sa propre tâche planifiée |
+| [`acmefrag`](acmefrag/) | Met à jour [AcmeFrag](https://github.com/jpreculeau/AcmeFrag), lance ses tests, surveille la santé SMART du disque (`--sante`, lecture seule ; dégradation = point d'attention), mesure la fragmentation **sans modifier** (`--dry-run`) | défragmenter : c'est long, et ça reste dans sa propre tâche planifiée |
 | [`flatpak`](flatpak/) | Met à jour les Flatpak, sauvegarde à froid les applications de `FLATPAK_SAUVEGARDES` | — |
 
 **Et Acmechanic lui-même ?** Il se met à jour tout seul, **en fin de run** (jamais pendant : les services en cours liraient un mélange de deux versions), en avance rapide et seulement si son dossier n'a pas de modifications locales. `ACMECHANIC_AUTO_MAJ=signaler` pour être seulement prévenu, `non` pour désactiver.
@@ -63,7 +63,7 @@ Aucun script n'est à modifier : tout se surcharge dans `local.conf` (modèle : 
 
 **Canal de pointe** : avec `develop`, `edge`, `unstable`…, `choisir_tag` compare la date de publication du canal et de `latest` et retient **le plus récent** — un canal abandonné ne vous fige jamais sur une vieille image.
 
-**Maintenance** — chaque service documente ses réglages en tête de script : `DEPOTS_GIT`, `DEPOTS_APPLIQUER`, `CHEZMOI_VERIFIER` ; `IA_OUTILS`, `IA_NPM`, `OLLAMA_MODELES_MAJ` ; `NETTOYAGE_*` ; `ACMEFRAG_DOSSIER`, `ACMEFRAG_CIBLE`.
+**Maintenance** — chaque service documente ses réglages en tête de script : `DEPOTS_GIT`, `DEPOTS_APPLIQUER`, `CHEZMOI_VERIFIER` ; `IA_OUTILS`, `IA_NPM`, `OLLAMA_MODELES_MAJ` ; `NETTOYAGE_*` ; `ACMEFRAG_DOSSIER`, `ACMEFRAG_CIBLE`, `ACMEFRAG_SANTE_CIBLE`, `ACMEFRAG_DELAI_SANTE`.
 
 ## 🧩 Contrat d'un compose compatible
 

@@ -156,6 +156,79 @@ check "outils-ia : claude update en echec deux fois, etape en echec" \
 	eq "$([ "$rc" -ne 0 ] && echo echec)/$(wc -l <"$B/essais")" "echec/2"
 out="$(ACMEFRAG_DOSSIER="$TMP/absent" "$ROOT/bibliotheque/acmefrag/acmefrag.sh" 2>&1)"; rc=$?
 check "acmefrag : absent => ignore, code 0" eq "$rc" "0"
+# Sante du disque : faux AcmeFrag ; --sante rend AF_SANTE_RC et sa ligne de bilan
+AFD="$TMP/af"; mkdir -p "$AFD" "$TMP/mon disque"
+cat >"$AFD/AcmeFrag.sh" <<'EOS'
+#!/bin/sh
+echo "$*" >>"$AF_LOG"
+case "$*" in
+*--version*) echo "acmefrag 3.1.0" ;;
+*--sante*) sleep "${AF_SANTE_DUREE:-0}"; echo "   detail"; [ -n "${AF_TEXTE:-}" ] && echo "$AF_TEXTE"
+	printf 'BILAN SANTÉ : %s\n' "${AF_BILAN:-Secteurs réalloués (5) : 40 → 48}"; exit "${AF_SANTE_RC:-0}" ;;
+esac
+exit 0
+EOS
+chmod +x "$AFD/AcmeFrag.sh"
+# sudo bouchonne : AF_SUDO=non simule un sudo qui demande un mot de passe
+mkdir -p "$TMP/af-bin"
+printf '#!/bin/sh\n[ "${AF_SUDO:-oui}" = oui ]\n' >"$TMP/af-bin/sudo"; chmod +x "$TMP/af-bin/sudo"
+sante() { # sante <code de --sante> [VAR=valeur...] : lance le service, renvoie son code
+	local c="$1"; shift
+	: >"$TMP/af.log"; : >"$TMP/att-af"; : >"$LOG_DIR/acmefrag.log"
+	env PATH="$TMP/af-bin:$PATH" AF_SANTE_RC="$c" AF_LOG="$TMP/af.log" ACMEFRAG_DOSSIER="$AFD" ACMEFRAG_CIBLE= \
+		ACMEFRAG_SANTE_CIBLE="$TMP/mon disque" ACMECHANIC_ATTENTION_FICHIER="$TMP/att-af" "$@" \
+		"$ROOT/bibliotheque/acmefrag/acmefrag.sh" >"$TMP/af.out" 2>&1
+}
+sante 6; rc=$?
+check "acmefrag sante : alerte => point d'attention, pas un echec" eq "$rc" "0"
+check "acmefrag sante : --sante lance sur la cible" grep -q -- "$TMP/mon disque --sante" "$TMP/af.log"
+check "acmefrag sante : bilan, commande, pourquoi et attendu" \
+	eq "$(awk -F '\037' '$2 ~ /40 → 48/ && $3 ~ /--sante/ && $4 != "" && $5 != "" {n++} END {print n+0}' "$TMP/att-af")" "1"
+cmd="$(awk -F '\037' 'NR == 1 {print $3}' "$TMP/att-af")"
+check "acmefrag sante : commande proposee executable" \
+	env AF_LOG=/dev/null bash -c '[ -n "$1" ] && eval "${1%--sante}--version" | grep -q 3.1.0' _ "$cmd"
+check "acmefrag sante : commande proposee, cible en un seul argument" \
+	bash -c 'c=$1 e=$2; eval "set -- $c"; [ "$#/$2/$3" = "3/$e/--sante" ]' _ "$cmd" "$TMP/mon disque"
+sante 6 AF_BILAN=$'piege\037rm -rf /tmp/x\037\033[31m'; rc=$?
+check "acmefrag sante : bilan hostile nettoye (5 champs, sans controle)" \
+	eq "$(awk -F '\037' '{print NF}' "$TMP/att-af")/$(LC_ALL=C grep -c $'\033' "$TMP/att-af")" "5/0"
+sante 0 AF_BILAN="aucune nouvelle dégradation (bilan PASSED)"; rc=$?
+check "acmefrag sante : disque sain => OK avec le bilan, rien a signaler" \
+	eq "$rc/$(wc -c <"$TMP/att-af")/$(grep -c 'OK .*AcmeFrag : aucune nouvelle dégradation (bilan PASSED)' "$LOG_DIR/acmefrag.log")" "0/0/1"
+sante 0 AF_BILAN="aucune nouvelle dégradation (bilan FAILED)"; rc=$?
+check "acmefrag sante : FAILED deja signale => journal seulement, jamais OK" \
+	eq "$rc/$(wc -c <"$TMP/att-af")/$(grep -c 'INFO .*(bilan FAILED)' "$LOG_DIR/acmefrag.log")/$(grep -c 'OK .*(bilan FAILED)' "$LOG_DIR/acmefrag.log")" "0/0/1/0"
+sante 7 AF_BILAN="mesure impossible : /dev/x en veille"; rc=$?
+check "acmefrag sante : mesure impossible => ignoree avec la raison, code 0" \
+	eq "$rc/$(wc -c <"$TMP/att-af")/$(grep -c 'sante du disque -- ignore : mesure impossible : /dev/x en veille' "$LOG_DIR/acmefrag.log")" "0/0/1"
+sante 2 AF_TEXTE="   ❌ Option inconnue : --sante (voir --help)"; rc=$?
+check "acmefrag sante : AcmeFrag sans --sante (code 2) => ignoree, code 0" \
+	eq "$rc/$(grep -c 'ignore : AcmeFrag 3.1 ou plus requis' "$LOG_DIR/acmefrag.log")" "0/1"
+sante 2 AF_TEXTE="   ❌ Configuration invalide"; rc=$?
+check "acmefrag sante : autre code 2 (configuration) => echec" \
+	eq "$([ "$rc" -ne 0 ] && echo echec)/$(grep -c 'ignore : AcmeFrag 3.1' "$LOG_DIR/acmefrag.log")" "echec/0"
+sante 6 AF_BILAN="$(printf 'x%.0s' {1..400})"; rc=$?
+check "acmefrag sante : bilan borne a 300 caracteres" \
+	eq "$(awk -F '\037' '{m = $2; sub(/^AcmeFrag : sante du disque : /, "", m); print length(m)}' "$TMP/att-af")" "300"
+# En root, sudo n'est pas consulte : cas sans objet
+[ "$(id -u)" -eq 0 ] || { sante 6 AF_SUDO=non; rc=$?
+check "acmefrag sante : sudo avec mot de passe => ignoree, AcmeFrag non lance" \
+	eq "$rc/$(grep -c -- --sante "$TMP/af.log")/$(grep -c 'ignore : sudo demande un mot de passe' "$LOG_DIR/acmefrag.log")" "0/0/1"; }
+sante 0 ACMEFRAG_CIBLE="$TMP/mon disque"
+check "acmefrag sante : apres la mesure --dry-run (disque deja reveille)" \
+	eq "$(grep -n -e --dry-run -e --sante "$TMP/af.log" | cut -d: -f2- | sed 's/.* //' | tr '\n' ' ')" "--dry-run --sante "
+sante 0 AF_SANTE_DUREE=3 ACMEFRAG_DELAI_SANTE=1; rc=$?
+check "acmefrag sante : delai depasse => echec" eq "$([ "$rc" -ne 0 ] && echo echec)/$(grep -c 'trop longue' "$LOG_DIR/acmefrag.log")" "echec/1"
+sante 1; rc=$?
+check "acmefrag sante : erreur d'AcmeFrag => echec" not eq "$rc" "0"
+sante 0 ACMEFRAG_SANTE_CIBLE="$TMP/debranche"; rc=$?
+check "acmefrag sante : cible absente => ignoree, code 0" eq "$rc/$(grep -c -- --sante "$TMP/af.log")" "0/0"
+: >"$TMP/af.log"
+env -u ACMEFRAG_SANTE_CIBLE PATH="$TMP/af-bin:$PATH" AF_LOG="$TMP/af.log" ACMEFRAG_DOSSIER="$AFD" ACMEFRAG_CIBLE="$TMP/mon disque" \
+	ACMECHANIC_ATTENTION_FICHIER="$TMP/att-af" "$ROOT/bibliotheque/acmefrag/acmefrag.sh" >/dev/null 2>&1
+check "acmefrag sante : cible par defaut = ACMEFRAG_CIBLE" grep -q -- "$TMP/mon disque --sante" "$TMP/af.log"
+sante 0 ACMEFRAG_SANTE_CIBLE= ACMEFRAG_CIBLE="$TMP/mon disque"; rc=$?
+check "acmefrag sante : desactivee si cible vide, meme avec ACMEFRAG_CIBLE" eq "$rc/$(grep -c -- --sante "$TMP/af.log")" "0/0"
 
 echo "ollama (installeur officiel, bouchons)"
 O="$TMP/ollama"; mkdir -p "$O"; echo 1.0.0 >"$O/ov"; : >"$O/systemctl.log"

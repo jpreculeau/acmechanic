@@ -57,6 +57,8 @@
 # NWG_PANEL_CORRECTIFS=(ma-branche-de-correctif)
 # NETTOYAGE_JOURNAL=2weeks          # ou non
 # ACMEFRAG_CIBLE="/chemin/vers/disque/Videos"
+# ACMEFRAG_SANTE_CIBLE="/chemin/vers/disque"  # santé SMART (défaut : ACMEFRAG_CIBLE ; "" = rien)
+# ACMEFRAG_DELAI_SANTE=120          # s
 # ACMECHANIC_AUTO_MAJ=signaler      # oui (défaut) | signaler | non
 
 # --- Applications Flatpak sauvegardées (bibliotheque/flatpak) ---

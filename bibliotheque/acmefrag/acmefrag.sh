@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # acmefrag.sh - AcmeFrag (defragmenteur XFS/EXT4 de la famille ACME).
 #
-# Trois operations courtes, jamais de defragmentation ici : elle peut
+# Operations courtes, jamais de defragmentation ici : elle peut
 # durer des heures et doit rester dans sa propre tache planifiee (la
 # nuit, bridee par AcmeFrag lui-meme).
 #   1. mise a jour d'AcmeFrag depuis son depot (avance rapide seulement)
 #   2. tests d'AcmeFrag (make test) apres une mise a jour
 #   3. mesure SANS modification (--auto --dry-run) sur ACMEFRAG_CIBLE,
 #      si elle est definie : rapport consultable dans ses journaux
+#   4. sante du disque (--sante) qui porte ACMEFRAG_SANTE_CIBLE : lecture
+#      SMART seule, sans reveiller un disque en veille ; une degradation
+#      devient un point d'attention (une fois : au passage qui la constate)
 #
 # https://github.com/jpreculeau/AcmeFrag
 # Installation : ln -s "$PWD/bibliotheque/acmefrag" services/acmefrag
@@ -25,6 +28,8 @@ source "${ACMECHANIC_HOME}/lib/service.sh"
 : "${ACMEFRAG_DOSSIER:=$HOME/acmefrag}"   # clone du depot AcmeFrag
 : "${ACMEFRAG_CIBLE:=}"                   # dossier mesure (vide = pas de mesure)
 : "${ACMEFRAG_DELAI_MESURE:=1500}"        # s ; un gros disque est long a scanner
+: "${ACMEFRAG_SANTE_CIBLE=$ACMEFRAG_CIBLE}" # dossier dont le disque est surveille (vide = rien)
+: "${ACMEFRAG_DELAI_SANTE:=120}"          # s ; une lecture SMART prend quelques secondes
 # -------------------------------------------------------------------------------
 
 titre "ACMEFRAG"
@@ -80,6 +85,54 @@ else
 	4) ignorer_etape "AcmeFrag : mesure" "AcmeFrag deja en cours" ;;
 	124) err "AcmeFrag : mesure trop longue (> ${ACMEFRAG_DELAI_MESURE}s)"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
 	*) err "AcmeFrag : mesure en echec"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
+	esac
+fi
+
+# --- 4. Sante du disque -----------------------------------------------------------
+# Apres la mesure : celle-ci reveille le disque ; --sante, qui ne reveille
+# pas un disque en veille, aboutit alors au lieu d'etre ignore.
+# Codes de --sante : 0 pas de nouvelle degradation, 6 alerte, 7 mesure
+# impossible (SMART indisponible, disque en veille), 2 option inconnue
+# (AcmeFrag < 3.1). La derniere ligne « BILAN SANTÉ : ... » resume le
+# resultat ; sortie d'un autre processus : caracteres de controle retires
+# (le fichier d'attention est separe par \x1f), longueur bornee.
+if [ -z "$ACMEFRAG_SANTE_CIBLE" ]; then
+	log "AcmeFrag : sante du disque non surveillee (ACMEFRAG_SANTE_CIBLE vide)."
+elif [ ! -d "$ACMEFRAG_SANTE_CIBLE" ]; then
+	ignorer_etape "AcmeFrag : sante du disque" "dossier absent : $ACMEFRAG_SANTE_CIBLE (disque debranche ?)"
+elif [ "$(id -u)" -ne 0 ] && ! sudo_disponible; then
+	# AcmeFrag se relance par sudo : sans droit sans mot de passe, il
+	# attendrait une saisie jusqu'au delai.
+	ignorer_etape "AcmeFrag : sante du disque" "sudo demande un mot de passe (AcmeFrag lit SMART en root)"
+else
+	step "AcmeFrag : sante du disque de $ACMEFRAG_SANTE_CIBLE"
+	sortie="$(timeout "$ACMEFRAG_DELAI_SANTE" "$AF" "$ACMEFRAG_SANTE_CIBLE" --sante </dev/null 2>&1)"
+	code=$?
+	printf '%s\n' "$sortie"
+	bilan="$(printf '%s\n' "$sortie" | LC_ALL=C sed -n 's/^.*BILAN SANT[^ ]* : //p' | tail -n 1 |
+		LC_ALL=C tr -d '\000-\037\177')"
+	bilan="${bilan:0:300}"
+	case $code in
+	0)
+		# Bilan autre que PASSED : deja mauvais (FAILED connu, signale a son
+		# apparition) ou NA (pont sans statut SMART) : mention au journal,
+		# jamais un OK.
+		case $bilan in
+		*"(bilan PASSED)") ok "AcmeFrag : $bilan" ;;
+		*) log "AcmeFrag : sante du disque : ${bilan:-pas de nouvelle degradation}" ;;
+		esac ;;
+	6) point_attention "AcmeFrag : sante du disque : ${bilan:-degradation signalee par AcmeFrag}" \
+		"$(printf '%q %q --sante' "$AF" "$ACMEFRAG_SANTE_CIBLE")" \
+		"le disque se degrade : ses donnees sont en danger tant qu'elles n'ont pas d'autre copie" \
+		"relit SMART sans rien ecrire sur le disque surveille et affiche les valeurs du jour ; l'evolution complete est dans l'historique sante des rapports d'AcmeFrag. Ensuite : sauvegarder, puis remplacer le disque" ;;
+	2) case $sortie in
+		*"Option inconnue : --sante"*)
+			ignorer_etape "AcmeFrag : sante du disque" "AcmeFrag 3.1 ou plus requis (option --sante inconnue)" ;;
+		*) err "AcmeFrag : sante du disque en echec (code 2 : configuration d'AcmeFrag ?)"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
+		esac ;;
+	7) ignorer_etape "AcmeFrag : sante du disque" "${bilan:-mesure impossible}" ;;
+	124) err "AcmeFrag : sante du disque trop longue (> ${ACMEFRAG_DELAI_SANTE}s)"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
+	*) err "AcmeFrag : sante du disque en echec (code $code)"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
 	esac
 fi
 
