@@ -7,6 +7,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 
 ### Ajouté
 - `acmefrag` : santé du disque à chaque passage (`AcmeFrag <cible> --sante`, AcmeFrag 3.1 ou plus ; plus ancien : étape ignorée) : lecture SMART seule, sans réveiller un disque en veille ; une dégradation signalée par AcmeFrag (critères : voir son CHANGELOG) devient un point d'attention, avec l'évolution « avant → après ». Une alerte est signalée une fois, au passage qui la constate ; un bilan déjà mauvais et déjà signalé est ensuite seulement rappelé au journal. L'étape suit la mesure `--dry-run` (qui réveille le disque) et est ignorée si `sudo` demande un mot de passe. Réglages `ACMEFRAG_SANTE_CIBLE` (défaut : `ACMEFRAG_CIBLE` ; vide = rien) et `ACMEFRAG_DELAI_SANTE` (120 s).
+- `acmefrag` : le code `8` d'AcmeFrag 4.0 (installation non sûre : son code, sa configuration ou ses rapports sont modifiables par un autre compte) est compté en échec, avec sa raison, pour la mesure comme pour la santé du disque ; il n'est jamais confondu avec un refus attendu (code `3` : SSD, FS racine), qui reste ignoré.
 - Questions avec décompte : sans réponse dans `ACMECHANIC_DELAI_REPONSE` secondes (30 par défaut, `0` = sans limite), la réponse par défaut (non) s'applique.
 - Tâches anticipées visibles : le rafraîchissement des dépôts lancé pendant les services s'affiche dans la case « systeme » dès qu'il tourne ; il vaut désormais pour APT comme pour Nala.
 

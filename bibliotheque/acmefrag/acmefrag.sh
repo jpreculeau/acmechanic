@@ -36,6 +36,10 @@ source "${ACMECHANIC_HOME}/lib/service.sh"
 # passe, il attendrait une saisie jusqu'au delai de l'etape.
 root_ou_sudo() { [ "$(id -u)" -eq 0 ] || sudo_disponible; }
 RAISON_SANS_SUDO="sudo demande un mot de passe (AcmeFrag travaille en root)"
+# Code 8 (AcmeFrag >= 4.0) : en root, il refuse son code, sa configuration ou ses
+# rapports s'ils sont modifiables par un autre compte. Un probleme a corriger,
+# jamais un refus attendu comme le code 3 (SSD, FS racine).
+RAISON_NON_SURE="installation d'AcmeFrag non sure (fichiers ou rapports modifiables par un autre compte, voir son README, « Sécurité »)"
 
 titre "ACMEFRAG"
 AF="$ACMEFRAG_DOSSIER/AcmeFrag.sh"
@@ -90,6 +94,7 @@ else
 	0) ok "AcmeFrag : mesure terminee (rapport dans les journaux d'AcmeFrag)." ;;
 	3) ignorer_etape "AcmeFrag : mesure" "refus de securite d'AcmeFrag (SSD, FS racine...)" ;;
 	4) ignorer_etape "AcmeFrag : mesure" "AcmeFrag deja en cours" ;;
+	8) err "AcmeFrag : mesure refusee : $RAISON_NON_SURE"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
 	124) err "AcmeFrag : mesure trop longue (> ${ACMEFRAG_DELAI_MESURE}s)"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
 	*) err "AcmeFrag : mesure en echec"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
 	esac
@@ -99,10 +104,11 @@ fi
 # Apres la mesure : celle-ci reveille le disque ; --sante, qui ne reveille
 # pas un disque en veille, aboutit alors au lieu d'etre ignore.
 # Codes de --sante : 0 pas de nouvelle degradation, 6 alerte, 7 mesure
-# impossible (SMART indisponible, disque en veille), 2 option inconnue
-# (AcmeFrag < 3.1). La derniere ligne « BILAN SANTÉ : ... » resume le
-# resultat ; sortie d'un autre processus : caracteres de controle retires
-# (le fichier d'attention est separe par \x1f), longueur bornee.
+# impossible (SMART indisponible, disque en veille), 8 installation non sure
+# (AcmeFrag >= 4.0), 2 option inconnue (AcmeFrag < 3.1). La derniere ligne
+# « BILAN SANTÉ : ... » resume le resultat ; sortie d'un autre processus :
+# caracteres de controle retires (le fichier d'attention est separe par
+# \x1f), longueur bornee.
 if [ -z "$ACMEFRAG_SANTE_CIBLE" ]; then
 	log "AcmeFrag : sante du disque non surveillee (ACMEFRAG_SANTE_CIBLE vide)."
 elif [ ! -d "$ACMEFRAG_SANTE_CIBLE" ]; then
@@ -136,6 +142,7 @@ else
 		*) err "AcmeFrag : sante du disque en echec (code 2 : configuration d'AcmeFrag ?)"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
 		esac ;;
 	7) ignorer_etape "AcmeFrag : sante du disque" "${bilan:-mesure impossible}" ;;
+	8) err "AcmeFrag : sante du disque refusee : $RAISON_NON_SURE"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
 	124) err "AcmeFrag : sante du disque trop longue (> ${ACMEFRAG_DELAI_SANTE}s)"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
 	*) err "AcmeFrag : sante du disque en echec (code $code)"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
 	esac

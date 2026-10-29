@@ -165,6 +165,7 @@ case "$*" in
 *--version*) echo "acmefrag 3.1.0" ;;
 *--sante*) sleep "${AF_SANTE_DUREE:-0}"; echo "   detail"; [ -n "${AF_TEXTE:-}" ] && echo "$AF_TEXTE"
 	printf 'BILAN SANTÉ : %s\n' "${AF_BILAN:-Secteurs réalloués (5) : 40 → 48}"; exit "${AF_SANTE_RC:-0}" ;;
+*--dry-run*) exit "${AF_MESURE_RC:-0}" ;;
 esac
 exit 0
 EOS
@@ -229,6 +230,15 @@ sante 0 AF_SANTE_DUREE=3 ACMEFRAG_DELAI_SANTE=1; rc=$?
 check "acmefrag sante : delai depasse => echec" eq "$([ "$rc" -ne 0 ] && echo echec)/$(grep -c 'trop longue' "$LOG_DIR/acmefrag.log")" "echec/1"
 sante 1; rc=$?
 check "acmefrag sante : erreur d'AcmeFrag => echec" not eq "$rc" "0"
+sante 8; rc=$?
+check "acmefrag sante : installation non sure (code 8) => echec explique" \
+	eq "$([ "$rc" -ne 0 ] && echo echec)/$(grep -c 'sante du disque refusee : installation d.AcmeFrag non sure' "$LOG_DIR/acmefrag.log")" "echec/1"
+sante 0 ACMEFRAG_CIBLE="$TMP/mon disque" AF_MESURE_RC=8; rc=$?
+check "acmefrag mesure : installation non sure (code 8) => echec explique, pas ignoree" \
+	eq "$([ "$rc" -ne 0 ] && echo echec)/$(grep -c 'mesure refusee : installation d.AcmeFrag non sure' "$LOG_DIR/acmefrag.log")/$(grep -c 'mesure -- ignore' "$LOG_DIR/acmefrag.log")" "echec/1/0"
+sante 0 ACMEFRAG_CIBLE="$TMP/mon disque" AF_MESURE_RC=3; rc=$?
+check "acmefrag mesure : refus de securite (code 3) => ignoree, code 0" \
+	eq "$rc/$(grep -c 'mesure -- ignore : refus de securite' "$LOG_DIR/acmefrag.log")" "0/1"
 sante 0 ACMEFRAG_SANTE_CIBLE="$TMP/debranche"; rc=$?
 check "acmefrag sante : cible absente => ignoree, code 0" eq "$rc/$(grep -c -- --sante "$TMP/af.log")" "0/0"
 : >"$TMP/af.log"
