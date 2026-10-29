@@ -172,6 +172,9 @@ chmod +x "$AFD/AcmeFrag.sh"
 # sudo bouchonne : AF_SUDO=non simule un sudo qui demande un mot de passe
 mkdir -p "$TMP/af-bin"
 printf '#!/bin/sh\n[ "${AF_SUDO:-oui}" = oui ]\n' >"$TMP/af-bin/sudo"; chmod +x "$TMP/af-bin/sudo"
+# id bouchonne : AF_UID force « id -u » (cas root testable sans etre root)
+printf '#!/bin/sh\n[ "$1" = -u ] && [ -n "${AF_UID:-}" ] && { echo "$AF_UID"; exit 0; }\nexec %s "$@"\n' "$(command -v id)" >"$TMP/af-bin/id"
+chmod +x "$TMP/af-bin/id"
 sante() { # sante <code de --sante> [VAR=valeur...] : lance le service, renvoie son code
 	local c="$1"; shift
 	: >"$TMP/af.log"; : >"$TMP/att-af"; : >"$LOG_DIR/acmefrag.log"
@@ -210,10 +213,15 @@ check "acmefrag sante : autre code 2 (configuration) => echec" \
 sante 6 AF_BILAN="$(printf 'x%.0s' {1..400})"; rc=$?
 check "acmefrag sante : bilan borne a 300 caracteres" \
 	eq "$(awk -F '\037' '{m = $2; sub(/^AcmeFrag : sante du disque : /, "", m); print length(m)}' "$TMP/att-af")" "300"
-# En root, sudo n'est pas consulte : cas sans objet
-[ "$(id -u)" -eq 0 ] || { sante 6 AF_SUDO=non; rc=$?
+sante 6 AF_UID=1000 AF_SUDO=non; rc=$?
 check "acmefrag sante : sudo avec mot de passe => ignoree, AcmeFrag non lance" \
-	eq "$rc/$(grep -c -- --sante "$TMP/af.log")/$(grep -c 'ignore : sudo demande un mot de passe' "$LOG_DIR/acmefrag.log")" "0/0/1"; }
+	eq "$rc/$(grep -c -- --sante "$TMP/af.log")/$(grep -c 'ignore : sudo demande un mot de passe' "$LOG_DIR/acmefrag.log")" "0/0/1"
+sante 0 AF_UID=1000 AF_SUDO=non ACMEFRAG_CIBLE="$TMP/mon disque"; rc=$?
+check "acmefrag mesure : sudo avec mot de passe => ignoree, AcmeFrag non lance" \
+	eq "$rc/$(grep -c -e --dry-run -e --sante "$TMP/af.log")/$(grep -c 'mesure -- ignore : sudo demande un mot de passe' "$LOG_DIR/acmefrag.log")/$(grep -c 'ignore : sudo demande un mot de passe' "$LOG_DIR/acmefrag.log")" "0/0/1/2"
+sante 0 AF_UID=0 AF_SUDO=non ACMEFRAG_CIBLE="$TMP/mon disque"; rc=$?
+check "acmefrag : en root, sudo non consulte, mesure et sante lancees" \
+	eq "$rc/$(grep -c -e --dry-run -e --sante "$TMP/af.log")" "0/2"
 sante 0 ACMEFRAG_CIBLE="$TMP/mon disque"
 check "acmefrag sante : apres la mesure --dry-run (disque deja reveille)" \
 	eq "$(grep -n -e --dry-run -e --sante "$TMP/af.log" | cut -d: -f2- | sed 's/.* //' | tr '\n' ' ')" "--dry-run --sante "

@@ -32,6 +32,11 @@ source "${ACMECHANIC_HOME}/lib/service.sh"
 : "${ACMEFRAG_DELAI_SANTE:=120}"          # s ; une lecture SMART prend quelques secondes
 # -------------------------------------------------------------------------------
 
+# AcmeFrag se relance par sudo s'il n'est pas root : sans droit sans mot de
+# passe, il attendrait une saisie jusqu'au delai de l'etape.
+root_ou_sudo() { [ "$(id -u)" -eq 0 ] || sudo_disponible; }
+RAISON_SANS_SUDO="sudo demande un mot de passe (AcmeFrag travaille en root)"
+
 titre "ACMEFRAG"
 AF="$ACMEFRAG_DOSSIER/AcmeFrag.sh"
 
@@ -74,6 +79,8 @@ if [ -z "$ACMEFRAG_CIBLE" ]; then
 	log "AcmeFrag : mesure desactivee (ACMEFRAG_CIBLE non definie)."
 elif [ ! -d "$ACMEFRAG_CIBLE" ]; then
 	ignorer_etape "AcmeFrag : mesure" "dossier absent : $ACMEFRAG_CIBLE (disque debranche ?)"
+elif ! root_ou_sudo; then
+	ignorer_etape "AcmeFrag : mesure" "$RAISON_SANS_SUDO"
 else
 	# Codes AcmeFrag : 3 = refus de securite (SSD, FS racine...), 4 = deja
 	# en cours (la defragmentation planifiee tourne) : pas des echecs.
@@ -100,10 +107,8 @@ if [ -z "$ACMEFRAG_SANTE_CIBLE" ]; then
 	log "AcmeFrag : sante du disque non surveillee (ACMEFRAG_SANTE_CIBLE vide)."
 elif [ ! -d "$ACMEFRAG_SANTE_CIBLE" ]; then
 	ignorer_etape "AcmeFrag : sante du disque" "dossier absent : $ACMEFRAG_SANTE_CIBLE (disque debranche ?)"
-elif [ "$(id -u)" -ne 0 ] && ! sudo_disponible; then
-	# AcmeFrag se relance par sudo : sans droit sans mot de passe, il
-	# attendrait une saisie jusqu'au delai.
-	ignorer_etape "AcmeFrag : sante du disque" "sudo demande un mot de passe (AcmeFrag lit SMART en root)"
+elif ! root_ou_sudo; then
+	ignorer_etape "AcmeFrag : sante du disque" "$RAISON_SANS_SUDO"
 else
 	step "AcmeFrag : sante du disque de $ACMEFRAG_SANTE_CIBLE"
 	sortie="$(timeout "$ACMEFRAG_DELAI_SANTE" "$AF" "$ACMEFRAG_SANTE_CIBLE" --sante </dev/null 2>&1)"
