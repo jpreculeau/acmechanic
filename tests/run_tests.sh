@@ -263,7 +263,7 @@ check "espace_reel_h lisible ; meme_fs vrai sur le meme FS, faux sur /proc ou un
 check "noter_bilan : ligne INFO du bilan, aucun compteur d'etape touche" eq "$(sed -n '3,4p' <<<"$out" | tr '\n' /)" "1/0000/"
 
 echo "cross-seed : config.js, qBittorrent et liens (lib/xseed.sh)"
-XS="$TMP/xs"; mkdir -p "$XS/config" "$XS/bin" "$XS/data/Film.A" "$XS/data2" "$XS/links/trackerA" "$XS/links/trackerB"
+XS="$TMP/xs"; mkdir -p "$XS/config" "$XS/bin" "$XS/data/Film.A" "$XS/data2" "$XS/[01] Films" "$XS/links/trackerA" "$XS/links/trackerB"
 cat >"$XS/config/config.js" <<EOS
 // config.js de test
 module.exports = {
@@ -271,7 +271,8 @@ module.exports = {
   // linkDirs: ["/commente"],
   dataDirs: [
     "$XS/data",
-    '$XS/data2'   // simples quotes
+    '$XS/data2',   // simples quotes
+    "$XS/[01] Films",   // crochets dans un nom de dossier
   ],
   linkDirs: ["$XS/links"],
   matchMode: "flexible",
@@ -331,8 +332,8 @@ out="$(bash -c 'SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"
 	xseed_monte_a_l_identique c "$1/links"; echo "inspect=$?"
 ' _ "$XS" 2>&1)"
 check "config.js : linkDirs lu (cle commentee ignoree)" eq "$(sed -n 1p <<<"$out")" "$XS/links "
-check "config.js : dataDirs sur plusieurs lignes, simples quotes, commentaire de fin" \
-	eq "$(sed -n 2p <<<"$out")" "$XS/data $XS/data2 "
+check "config.js : dataDirs sur plusieurs lignes, simples quotes, commentaire de fin, crochets dans un nom" \
+	eq "$(sed -n 2p <<<"$out")" "$XS/data $XS/data2 $XS/[01] Films "
 check "config.js : valeur simple ; cle absente = rien, code 0" eq "$(sed -n '3,4p' <<<"$out" | tr '\n' /)" "flexible/rc=0/"
 check "qbit_url : torrentClients de config.js, CROSS_SEED_QBIT_URL prioritaire" \
 	eq "$(sed -n '5,6p' <<<"$out" | tr '\n' /)" "http://moi:s3cret@127.0.0.1:8080/http://x//"
@@ -416,7 +417,7 @@ if mkdir -p "$AUTRE_FS/links" 2>/dev/null && [ "$(stat -c %d "$AUTRE_FS")" != "$
 	check "cross-seed : linkDir sur un autre FS => « hardlink impossible pour <dataDir> : injection en echec », code 0" \
 		eq "$rc/$(grep -c "hardlink impossible pour $XS/data : injection en echec" "$XS/att")" "0/1"
 	check "cross-seed : linkDir absent de l'hote signale, sans faux « hardlink impossible »" \
-		eq "$(rmdir "$AUTRE_FS/links"; xs CROSS_SEED_CONFIG="$XS/config/autre-fs.js"; grep -c "linkDir absent sur l.hote : $AUTRE_FS/links" "$XS/att")/$(grep -c 'hardlink impossible' "$XS/att")" "1/2"
+		eq "$(rmdir "$AUTRE_FS/links"; xs CROSS_SEED_CONFIG="$XS/config/autre-fs.js"; grep -c "linkDir absent sur l.hote : $AUTRE_FS/links" "$XS/att")/$(grep -c 'hardlink impossible' "$XS/att")" "1/3"
 	rm -rf "$AUTRE_FS"
 else
 	echo "  (saute : pas de second systeme de fichiers inscriptible)"
@@ -424,7 +425,7 @@ fi
 : >"$XS/montages"   # conteneur sans ces volumes
 xs; rc=$?
 check "cross-seed : chemin non monte a l'identique dans le conteneur => point d'attention, code 0" \
-	eq "$rc/$(grep -c "n'est pas monte dans le conteneur au meme chemin" "$XS/att")" "0/3"
+	eq "$rc/$(grep -c "n'est pas monte dans le conteneur au meme chemin" "$XS/att")" "0/4"
 printf '%s\t%s\n' "$XS" "$XS" >"$XS/montages"
 xs QBIT_SAVE="$XS" CROSS_SEED_QBIT_URL="http://moi:faux@127.0.0.1:8080"; rc=$?
 check "cross-seed : identifiants qBittorrent refuses => avertissement, pas d'orphelins, code 0" \

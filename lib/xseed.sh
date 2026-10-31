@@ -40,13 +40,16 @@ config_js_liste() {
 	[ -r "$fichier" ] || return 1
 	LC_ALL=C awk -v cle="$cle" -v q="'" '
 		{ sub(/^[ \t]*\/\/.*/, ""); sub("//[^\"" q "]*$", "") }   # commentaires
+		# Les crochets sont cherches hors des chaines : un nom de dossier
+		# peut en contenir ("[01] Films").
+		function hors_chaines(l) { gsub("\"[^\"]*\"|" q "[^" q "]*" q, "", l); return l }
 		!lu && $0 ~ ("^[ \t]*" cle "[ \t]*:") {
 			sub("^[ \t]*" cle "[ \t]*:", ""); lu = 1
-			if ($0 !~ /\[/) { texte = $0; exit }   # valeur simple : une ligne
+			if (hors_chaines($0) !~ /\[/) { texte = $0; exit }   # valeur simple : une ligne
 		}
 		lu {
 			texte = texte $0 "\n"
-			if ($0 ~ /\]/) exit                     # fin de la liste
+			if (hors_chaines($0) ~ /\]/) exit                  # fin de la liste
 		}
 		END {
 			re = "\"[^\"]*\"|" q "[^" q "]*" q
