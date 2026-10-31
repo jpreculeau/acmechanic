@@ -22,6 +22,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), ver
 - Journal : la fin de la sortie d'un service en échec (20 lignes, précédées des lignes `ERREUR` situées plus haut, « [...] » marquant les sauts) y est désormais recopiée, et plus seulement affichée ; les marqueurs d'étape des sorties recopiées (`ETAPE`, `OK`, `ERREUR`) sont séparés de leur texte.
 - Service `bureau` renommé **`session-graphique`** (plus explicite : compositeur Wayland et barre). Réglages : `SESSION_GRAPHIQUE_PIP_GIT`, `SESSION_GRAPHIQUE_ETAT` ; les anciens `BUREAU_PIP_GIT` / `BUREAU_ETAT` restent lus. Mise à jour d'une installation : remplacer le lien `bureau` par `ln -s bibliotheque/session-graphique session-graphique`.
 
+- `lib/xseed.sh` : les contrôles des liens physiques de `cross-seed` sont une fonction de la bibliothèque, `xseed_controler <conteneur>` : un script maison qui gère cross-seed peut les appeler (après `source lib/common.sh` et `lib/xseed.sh`, avec `CROSS_SEED_CONFIG` posé).
+
 ### Corrigé
 - `lib/xseed.sh` : une liste de `config.js` dont une valeur contient un crochet (`"/Films/[01] Films biens"`) était tronquée à cette valeur ; les crochets sont désormais cherchés hors des chaînes.
 - `acmefrag` : la mesure `--dry-run` est désormais ignorée, avec sa raison, quand `sudo` demande un mot de passe, comme l'étape santé : AcmeFrag se relance par `sudo` s'il n'est pas root, et attendait alors une saisie jusqu'au délai de l'étape (`ACMEFRAG_DELAI_MESURE`, 25 min) en session interactive, ou échouait aussitôt sans terminal ; l'étape était comptée en échec.

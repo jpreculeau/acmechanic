@@ -438,6 +438,23 @@ xs CROSS_SEED_CONFIG="$XS/config/sans-liens.js"; rc=$?
 check "cross-seed : pas de linkDirs => rien a controler, code 0" \
 	eq "$rc/$(grep -c 'liens physiques non utilises' "$LOG_DIR/cross-seed.log")/$(wc -c <"$XS/att")" "0/1/0"
 
+# Script maison (comme un service prive) : lib/common.sh + lib/xseed.sh seulement,
+# xseed_controler appele avec le nom de son conteneur.
+cat >"$XS/maison.sh" <<'EOS'
+set -uo pipefail   # comme un script prive : une variable sans defaut arreterait tout
+SERVICE_NAME=maison; source "$ACMECHANIC_HOME/lib/common.sh"; source "$ACMECHANIC_HOME/lib/xseed.sh"
+docker() { [ "$1" = inspect ] && [ "${*: -1}" = mon-xseed ] && cat "$XS_MONTAGES"; }   # autre conteneur : absent
+xseed_controler mon-xseed
+echo "echecs=$NB_ECHEC"
+EOS
+: >"$XS/att"; : >"$XS/montages"
+out="$(env PATH="$XS/bin:$PATH" QBIT_INFO="$XS/info.json" QBIT_SAVE="$XS/data" XS_MONTAGES="$XS/montages" \
+	CROSS_SEED_CONFIG="$XS/config/config.js" ACMECHANIC_ATTENTION_FICHIER="$XS/att" QBIT_REFUS="$XS/refus" \
+	LOG_DIR="$TMP/maison" bash "$XS/maison.sh" 2>/dev/null)"
+check "xseed_controler depuis un script maison : conteneur donne en argument inspecte, points d'attention, aucun echec" \
+	eq "$(tail -n 1 <<<"$out")/$(grep -c "monte dans le conteneur au meme chemin" "$XS/att")/$(grep -c 'INFO .*liens orphelins : 2 sur 4' "$TMP/maison/maison.log")" "echecs=0/4/1"
+printf '%s\t%s\n' "$XS" "$XS" >"$XS/montages"
+
 echo "nettoyage : liens cross-seed jamais supprimes, orphelins proposes (bouchons)"
 NH="$TMP/nh"; mkdir -p "$NH/.cache/thumbnails/xseed-links/t" "$NH/logs/foo" "$NH/logs/xseed-links"
 echo v >"$NH/.cache/thumbnails/vieille.png"; echo v >"$NH/.cache/thumbnails/xseed-links/t/lien.png"
