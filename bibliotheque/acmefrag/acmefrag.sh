@@ -7,7 +7,9 @@
 #   1. mise a jour d'AcmeFrag depuis son depot (avance rapide seulement)
 #   2. tests d'AcmeFrag (make test) apres une mise a jour
 #   3. mesure SANS modification (--auto --dry-run) sur ACMEFRAG_CIBLE,
-#      si elle est definie : rapport consultable dans ses journaux
+#      si elle est definie : rapport consultable dans ses journaux ; ses
+#      lignes « liens ignores » et « multi-noms » (liens physiques de
+#      cross-seed, AcmeFrag recent) sont reprises au bilan, si presentes
 #   4. sante du disque (--sante) qui porte ACMEFRAG_SANTE_CIBLE : lecture
 #      SMART seule, sans reveiller un disque en veille ; une degradation
 #      devient un point d'attention (une fois : au passage qui la constate)
@@ -40,6 +42,29 @@ RAISON_SANS_SUDO="sudo demande un mot de passe (AcmeFrag travaille en root)"
 # rapports s'ils sont modifiables par un autre compte. Un probleme a corriger,
 # jamais un refus attendu comme le code 3 (SSD, FS racine).
 RAISON_NON_SURE="installation d'AcmeFrag non sure (fichiers ou rapports modifiables par un autre compte, voir son README, « Sécurité »)"
+
+# relayer_rapport <sortie de la mesure> : reprend au bilan deux lignes du
+# rapport d'AcmeFrag quand il les ecrit (liens physiques de cross-seed) :
+# le compteur « liens ignores » et la ligne « multi-noms ». Un AcmeFrag
+# plus ancien ne les ecrit pas : rien n'est relaye, sans erreur. Sortie
+# d'un autre processus : couleurs et caracteres de controle retires,
+# longueur bornee.
+relayer_rapport() {
+	local f="$1" motif libelle ligne
+	[ -s "$f" ] || return 0
+	for motif in 'liens ignor' 'multi-noms'; do
+		ligne="$(LC_ALL=C grep -i -m 1 -- "$motif" "$f" |
+			LC_ALL=C sed "s/$(printf '\033')\[[0-9;]*[A-Za-z]//g" | LC_ALL=C tr -d '\000-\037\177' |
+			sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+		[ -n "$ligne" ] || continue
+		case $motif in
+		'liens ignor') libelle="AcmeFrag : liens ignores" ;;
+		*) libelle="AcmeFrag : multi-noms" ;;
+		esac
+		noter_bilan "$libelle" "${ligne:0:300}"
+	done
+	return 0
+}
 
 titre "ACMEFRAG"
 AF="$ACMEFRAG_DOSSIER/AcmeFrag.sh"
@@ -89,8 +114,10 @@ else
 	# Codes AcmeFrag : 3 = refus de securite (SSD, FS racine...), 4 = deja
 	# en cours (la defragmentation planifiee tourne) : pas des echecs.
 	step "AcmeFrag : mesure de $ACMEFRAG_CIBLE (simulation)"
-	timeout "$ACMEFRAG_DELAI_MESURE" "$AF" "$ACMEFRAG_CIBLE" --auto --dry-run </dev/null
-	case $? in
+	# La sortie est gardee (tee) pour y relever les lignes relayees au bilan.
+	fichier_temp RAPPORT_MESURE
+	timeout "$ACMEFRAG_DELAI_MESURE" "$AF" "$ACMEFRAG_CIBLE" --auto --dry-run </dev/null | tee "$RAPPORT_MESURE"
+	case ${PIPESTATUS[0]} in
 	0) ok "AcmeFrag : mesure terminee (rapport dans les journaux d'AcmeFrag)." ;;
 	3) ignorer_etape "AcmeFrag : mesure" "refus de securite d'AcmeFrag (SSD, FS racine...)" ;;
 	4) ignorer_etape "AcmeFrag : mesure" "AcmeFrag deja en cours" ;;
@@ -98,6 +125,7 @@ else
 	124) err "AcmeFrag : mesure trop longue (> ${ACMEFRAG_DELAI_MESURE}s)"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
 	*) err "AcmeFrag : mesure en echec"; NB_ECHEC=$((NB_ECHEC + 1)) ;;
 	esac
+	relayer_rapport "$RAPPORT_MESURE"
 fi
 
 # --- 4. Sante du disque -----------------------------------------------------------

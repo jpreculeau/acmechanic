@@ -483,6 +483,29 @@ check "nettoyage : NETTOYAGE_XSEED=non => ignore" eq "$rc/$(grep -c 'orphelins -
 nettoyage CROSS_SEED_CONFIG="$XS/config/sans-liens.js"; rc=$?
 check "nettoyage : pas de linkDirs => rien a proposer, code 0" eq "$rc/$(grep -c 'rien a proposer' "$NH/logs/nettoyage/nettoyage.log")" "0/1"
 
+echo "acmefrag : lignes du rapport relayees au bilan (bouchons)"
+# Faux AcmeFrag : --dry-run ecrit les lignes d'un AcmeFrag recent (AF_RAPPORT=oui)
+cat >"$AFD/AcmeFrag.sh" <<'EOS'
+#!/bin/sh
+echo "$*" >>"$AF_LOG"
+case "$*" in
+*--version*) echo "acmefrag 4.1.0" ;;
+*--dry-run*) echo "   scan"
+	[ "${AF_RAPPORT:-non}" = oui ] && printf '   \033[33m🔗 Liens ignorés : 12 (xseed-links)\033[0m\n   multi-noms : 3 inodes, 7 noms\n'
+	exit "${AF_MESURE_RC:-0}" ;;
+esac
+exit 0
+EOS
+sante 0 AF_SUDO=oui ACMEFRAG_CIBLE="$TMP/mon disque" ACMEFRAG_SANTE_CIBLE= AF_RAPPORT=oui; rc=$?
+check "acmefrag : « liens ignores » et « multi-noms » du rapport au bilan, sans couleurs" \
+	eq "$rc/$(grep -c 'AcmeFrag : liens ignores  *INFO  *🔗 Liens ignorés : 12 (xseed-links)$' "$LOG_DIR/acmefrag.log")/$(grep -c 'AcmeFrag : multi-noms  *INFO  *multi-noms : 3 inodes, 7 noms$' "$LOG_DIR/acmefrag.log")" "0/1/1"
+sante 0 AF_SUDO=oui ACMEFRAG_CIBLE="$TMP/mon disque" ACMEFRAG_SANTE_CIBLE=; rc=$?
+check "acmefrag : AcmeFrag sans ces lignes => rien relaye, sans erreur" \
+	eq "$rc/$(grep -c 'AcmeFrag : \(liens ignores\|multi-noms\)' "$LOG_DIR/acmefrag.log")" "0/0"
+sante 0 AF_SUDO=oui ACMEFRAG_CIBLE="$TMP/mon disque" ACMEFRAG_SANTE_CIBLE= AF_RAPPORT=oui AF_MESURE_RC=1; rc=$?
+check "acmefrag : mesure en echec => lignes relayees quand meme, echec compte" \
+	eq "$([ "$rc" -ne 0 ] && echo echec)/$(grep -c 'liens ignores  *INFO' "$LOG_DIR/acmefrag.log")" "echec/1"
+
 echo "ollama (installeur officiel, bouchons)"
 O="$TMP/ollama"; mkdir -p "$O"; echo 1.0.0 >"$O/ov"; : >"$O/systemctl.log"
 cat >"$O/ollama" <<EOS
