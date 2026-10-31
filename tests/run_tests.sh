@@ -437,6 +437,52 @@ xs CROSS_SEED_CONFIG="$XS/config/sans-liens.js"; rc=$?
 check "cross-seed : pas de linkDirs => rien a controler, code 0" \
 	eq "$rc/$(grep -c 'liens physiques non utilises' "$LOG_DIR/cross-seed.log")/$(wc -c <"$XS/att")" "0/1/0"
 
+echo "nettoyage : liens cross-seed jamais supprimes, orphelins proposes (bouchons)"
+NH="$TMP/nh"; mkdir -p "$NH/.cache/thumbnails/xseed-links/t" "$NH/logs/foo" "$NH/logs/xseed-links"
+echo v >"$NH/.cache/thumbnails/vieille.png"; echo v >"$NH/.cache/thumbnails/xseed-links/t/lien.png"
+touch -a -d '200 days ago' "$NH/.cache/thumbnails/vieille.png" "$NH/.cache/thumbnails/xseed-links/t/lien.png"
+head -c 3145728 /dev/zero >"$NH/logs/foo/foo.log"; head -c 3145728 /dev/zero >"$NH/logs/xseed-links/xseed-links.log"
+ln "$XS/data/Film.A/film.mkv" "$XS/links/trackerA/l'ancien 2.mkv"   # orphelin au nom hostile
+nettoyage() {  # nettoyage [VAR=valeur...] : lance le service bouchonne, renvoie son code
+	mkdir -p "$NH/logs/nettoyage"; : >"$XS/att"; : >"$NH/logs/nettoyage/nettoyage.log"
+	env HOME="$NH" PATH="$XS/bin:$PATH" LOG_DIR="$NH/logs/nettoyage" QBIT_INFO="$XS/info.json" QBIT_SAVE="$XS/data" \
+		NETTOYAGE_DOCKER=non NETTOYAGE_JOURNAL=non NETTOYAGE_PAQUETS=non NETTOYAGE_LOG_MO=1 NETTOYAGE_VIGNETTES_JOURS=90 \
+		CROSS_SEED_CONFIG="$XS/config/config.js" ACMECHANIC_ATTENTION_FICHIER="$XS/att" QBIT_REFUS="$XS/refus" "$@" \
+		"$ROOT/bibliotheque/nettoyage/nettoyage.sh" >"$NH/sortie" 2>&1
+}
+nettoyage; rc=$?
+check "nettoyage : vignette ancienne supprimee, mais jamais sous un xseed-links" \
+	eq "$rc/$(test -e "$NH/.cache/thumbnails/vieille.png" && echo reste)/$(test -e "$NH/.cache/thumbnails/xseed-links/t/lien.png" && echo gardee)" "0//gardee"
+check "nettoyage : journal raccourci, mais jamais sous un xseed-links" \
+	eq "$(stat -c %s "$NH/logs/foo/foo.log")/$(stat -c %s "$NH/logs/xseed-links/xseed-links.log")" "524288/3145728"
+check "nettoyage : orphelin a autre nom propose, orphelin dernier nom conserve (jamais propose)" \
+	eq "$(grep -c '2 lien(s) cross-seed orphelin(s)' "$XS/att")/$(tr '\0' '\n' <"$NH/logs/nettoyage/liens-orphelins" | sort | tr '\n' ,)/$(grep -c '1 orphelin(s) qui sont le seul nom' "$NH/logs/nettoyage/nettoyage.log")" \
+		"1/$XS/links/trackerA/ancien.mkv,$XS/links/trackerA/l'ancien 2.mkv,/1"
+check "nettoyage : pourquoi et attendu donnes, rien supprime par le passage" \
+	eq "$(awk -F '\037' '$4 != "" && $5 != "" {n++} END {print n+0}' "$XS/att")/$(find "$XS/links" -type f | wc -l)" "1/5"
+cmd="$(awk -F '\037' 'NR == 1 {print $3}' "$XS/att")"
+# Un nom de plus dans la liste, redevenu seul nom de son inode avant l'execution
+ln "$XS/links/trackerB/seul.mkv" "$XS/links/trackerB/seul-bis.mkv"
+printf '%s\0' "$XS/links/trackerB/seul-bis.mkv" >>"$NH/logs/nettoyage/liens-orphelins"; rm "$XS/links/trackerB/seul.mkv"
+bash -c "$cmd" >/dev/null 2>&1; rc=$?
+check "nettoyage : la commande proposee retire les noms orphelins (espace, apostrophe compris), garde les donnees et un lien redevenu seul nom" \
+	eq "$rc/$(test -e "$XS/links/trackerA/ancien.mkv" || echo retire)/$(test -e "$XS/links/trackerA/l'ancien 2.mkv" || echo retire)/$(cat "$XS/data/Film.A/film.mkv")/$(test -e "$XS/links/trackerB/seul-bis.mkv" && echo garde)" "0/retire/retire/film/garde"
+nettoyage CROSS_SEED_QBIT_URL="http://a:b@injoignable:1"; rc=$?
+check "nettoyage : qBittorrent injoignable => proposition ignoree, code 0" \
+	eq "$rc/$(grep -c 'orphelins -- ignore : qBittorrent injoignable' "$NH/logs/nettoyage/nettoyage.log")/$(wc -c <"$XS/att")" "0/1/0"
+echo '[]' >"$XS/vide.json"
+nettoyage QBIT_INFO="$XS/vide.json"; rc=$?
+check "nettoyage : aucun content_path => proposition ignoree, rien ecrit" \
+	eq "$rc/$(grep -c 'orphelins -- ignore : aucun content_path' "$NH/logs/nettoyage/nettoyage.log")/$(wc -c <"$XS/att")" "0/1/0"
+printf '[{"name":"x","content_path":"/ailleurs/x"}]\n' >"$XS/ailleurs.json"
+nettoyage QBIT_INFO="$XS/ailleurs.json"; rc=$?
+check "nettoyage : tous les liens orphelins (chemins de qBittorrent != hote) => alerte, aucune commande, pas de liste" \
+	eq "$rc/$(grep -c 'tous les liens cross-seed' "$XS/att")/$(awk -F '\037' '$3 != "" {n++} END {print n+0}' "$XS/att")/$(test -e "$NH/logs/nettoyage/liens-orphelins" && echo liste)" "0/1/0/"
+nettoyage NETTOYAGE_XSEED=non; rc=$?
+check "nettoyage : NETTOYAGE_XSEED=non => ignore" eq "$rc/$(grep -c 'orphelins -- ignore : desactive' "$NH/logs/nettoyage/nettoyage.log")" "0/1"
+nettoyage CROSS_SEED_CONFIG="$XS/config/sans-liens.js"; rc=$?
+check "nettoyage : pas de linkDirs => rien a proposer, code 0" eq "$rc/$(grep -c 'rien a proposer' "$NH/logs/nettoyage/nettoyage.log")" "0/1"
+
 echo "ollama (installeur officiel, bouchons)"
 O="$TMP/ollama"; mkdir -p "$O"; echo 1.0.0 >"$O/ov"; : >"$O/systemctl.log"
 cat >"$O/ollama" <<EOS

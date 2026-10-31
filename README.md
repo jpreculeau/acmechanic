@@ -138,6 +138,7 @@ Ne modifiez pas `config.sh` : surchargez ses variables dans **`local.conf`** (ig
 | `CROSS_SEED_CONFIG` | `<CROSS_SEED_DONNEES>/config/config.js` | `cross-seed` et `nettoyage` : le `config.js` de cross-seed, lu sur l'hôte (`linkDirs`, `dataDirs`, `torrentClients`) |
 | `CROSS_SEED_QBIT_URL` | celle de `config.js` | API qBittorrent vue de l'hôte, identifiants compris (`http://utilisateur:motdepasse@127.0.0.1:8080`) ; vide = l'entrée `qbittorrent:` de `torrentClients` |
 | `CROSS_SEED_LIENS` | `oui` | `cross-seed` : contrôle des liens physiques au démarrage (`non` = ignoré) |
+| `NETTOYAGE_XSEED` | `oui` | `nettoyage` : proposition (jamais automatique) de retrait des liens cross-seed orphelins (`non` = ignoré) |
 | `CLAUDE_REPRISE_ATTENTE` | `30` | `outils-ia` : attente (s) avant le second et dernier essai d'un `claude update` en échec (registre npm parfois injoignable) |
 | `FLATPAK_SAUVEGARDES` | `()` | `nom:identifiant.flatpak` à sauvegarder |
 | `SERVICES_CONNUS` + `config_service()` | vides | Services restaurables par `restore.sh` |
