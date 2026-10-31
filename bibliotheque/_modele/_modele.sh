@@ -6,6 +6,10 @@
 #   mv services/mon-app/_modele.sh services/mon-app/mon-app.sh
 # puis adapter SERVICE_NAME et les reglages ci-dessous (convention
 # <NOM>_PROJET / _DONNEES / _URL / _CANAL, voir lib/service.sh).
+# Briques utiles (lib/common.sh) : point_attention (action a faire par
+# l'utilisateur), noter_bilan <libelle> <info> (constat au bilan, sans
+# compter comme une etape), espace_reel <chemins...> pour tout calcul
+# d'espace (un inode a plusieurs noms compte une fois), meme_fs a b.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 

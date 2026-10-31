@@ -248,6 +248,20 @@ check "acmefrag sante : cible par defaut = ACMEFRAG_CIBLE" grep -q -- "$TMP/mon 
 sante 0 ACMEFRAG_SANTE_CIBLE= ACMEFRAG_CIBLE="$TMP/mon disque"; rc=$?
 check "acmefrag sante : desactivee si cible vide, meme avec ACMEFRAG_CIBLE" eq "$rc/$(grep -c -- --sante "$TMP/af.log")" "0/0"
 
+echo "liens physiques : espace reel, meme_fs, noter_bilan (lib/common.sh)"
+H="$TMP/hl"; mkdir -p "$H/a" "$H/b"
+head -c 1048576 /dev/zero >"$H/a/fichier"; ln "$H/a/fichier" "$H/b/lien"
+out="$(bash -c 'SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"
+	echo "$(espace_reel "$1/a/fichier") $(espace_reel "$1/a/fichier" "$1/b/lien") $(espace_reel "$1/b/lien" "$1/a/fichier") $(espace_reel) $(espace_reel "$1/absent")"
+	echo "$(espace_reel_h "$1/a/fichier") $(meme_fs "$1/a" "$1/b" && echo meme) $(meme_fs / /proc || echo autre) $(meme_fs "$1" "$1/absent" || echo absent)"
+	noter_bilan "cle" "valeur"; RAPPORT_COMPACT=non rapport_final B | grep -c "^cle .*INFO .*valeur"
+	echo "$NB_OK$NB_ECHEC$NB_IGNORE$NB_INCHANGE"' _ "$H" 2>/dev/null)"
+check "espace_reel : fichier + lien physique comptes une fois, meme sur deux chemins" \
+	eq "$(sed -n 1p <<<"$out")" "1024 1024 1024 0 0"
+check "espace_reel_h lisible ; meme_fs vrai sur le meme FS, faux sur /proc ou un chemin absent" \
+	eq "$(sed -n 2p <<<"$out")" "1.0 Mio meme autre absent"
+check "noter_bilan : ligne INFO du bilan, aucun compteur d'etape touche" eq "$(sed -n '3,4p' <<<"$out" | tr '\n' /)" "1/0000/"
+
 echo "ollama (installeur officiel, bouchons)"
 O="$TMP/ollama"; mkdir -p "$O"; echo 1.0.0 >"$O/ov"; : >"$O/systemctl.log"
 cat >"$O/ollama" <<EOS

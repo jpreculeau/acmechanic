@@ -330,6 +330,40 @@ sudo_disponible() {
 	sudo -n true 2>/dev/null
 }
 
+# --- Espace disque et liens physiques ---
+# Un lien physique (hardlink) donne plusieurs noms a un meme inode : des
+# dossiers de liens (cross-seed : xseed-links/<tracker>/) font paraitre un
+# fichier deux fois. Tout calcul d'espace (bilan, seuil d'alerte) passe par
+# espace_reel, qui compte chaque inode une seule fois, meme s'il est nomme
+# sous plusieurs des chemins donnes (un seul appel a du : il dedoublonne ;
+# jamais `du -l`, qui compte chaque nom).
+# espace_reel <chemin...> : total en Kio (0 si rien de lisible).
+espace_reel() {
+	[ $# -gt 0 ] || { echo 0; return 0; }
+	du -skc -- "$@" 2>/dev/null | awk 'END {print $1+0}'
+	return 0   # un dossier illisible ne fait pas echouer la mesure (pipefail)
+}
+# espace_reel_h <chemin...> : le meme, lisible (Kio, Mio, Gio, Tio).
+espace_reel_h() {
+	local kio
+	kio="$(espace_reel "$@")"
+	awk -v k="$kio" 'BEGIN {
+		split("Kio Mio Gio Tio", u, " "); i = 1
+		while (k >= 1024 && i < 4) { k /= 1024; i++ }
+		fmt = (i == 1) ? "%d %s\n" : "%.1f %s\n"
+		printf fmt, k, u[i]
+	}'
+}
+# meme_fs <chemin1> <chemin2> : vrai si les deux chemins sont sur le meme
+# systeme de fichiers (meme numero de peripherique, stat -c %d) : condition
+# d'un lien physique entre eux. Faux si l'un des deux n'existe pas.
+meme_fs() {
+	local d1 d2
+	d1="$(stat -L -c %d -- "$1" 2>/dev/null)" || return 1   # -L : la cible d'un lien symbolique
+	d2="$(stat -L -c %d -- "$2" 2>/dev/null)" || return 1
+	[ -n "$d1" ] && [ "$d1" = "$d2" ]
+}
+
 # --- Compteurs de resultat, lus par le rapport final ---
 NB_OK=0
 NB_ECHEC=0
@@ -681,6 +715,15 @@ ignorer_etape() {
 	_enregistrer "$libelle" "IGNORE" "$raison"
 }
 
+# noter_bilan <libelle> <info> : une ligne d'information dans le bilan du
+# service (statut INFO), sans compter comme une etape : un constat releve
+# en passant (compteur d'un outil, espace mesure), repris au journal.
+noter_bilan() {
+	local libelle="${1//|/ }" info="${2//|/ }"   # « | » separe les champs du bilan
+	log "$libelle : $info"
+	_enregistrer "$libelle" "INFO" "$info"
+}
+
 # --- Rapport final ---
 # Affiche le tableau des etapes et renvoie le nombre d'echecs,
 # ce qui devient le code de sortie du script.
@@ -698,7 +741,7 @@ rapport_final() {
 			IFS='|' read -r libelle statut info <<<"$ligne"
 			case "$statut" in
 			OK | MAJ) couleur="$C_GREEN" ;;
-			INCHANGE) couleur="$C_CYAN" ;;
+			INCHANGE | INFO) couleur="$C_CYAN" ;;
 			IGNORE) couleur="$C_YELLOW" ;;
 			*) couleur="$C_RED" ;;
 			esac

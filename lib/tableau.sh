@@ -693,7 +693,8 @@ tableau_versions() {
 tableau_fin() {
 	local code="$1" libre usage taille anneaux="" i
 	read -r libre usage < <(df -h "$HOME" | awk "NR==2 {print \$4, \$5}")
-	taille="$(du -sh "$BACKUP_ROOT" 2>/dev/null | cut -f1)"
+	# espace_reel (lib/common.sh) : un inode a plusieurs noms compte une fois.
+	taille="$(espace_reel_h "$BACKUP_ROOT")"
 	echo
 	if [ "$code" -eq 0 ]; then
 		# Fermeture « a l'iris » facon dessin anime : anneaux colores
