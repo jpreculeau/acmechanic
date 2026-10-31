@@ -56,6 +56,9 @@
 # NWG_PANEL_SRC="$HOME/src/nwg-panel"
 # NWG_PANEL_CORRECTIFS=(ma-branche-de-correctif)
 # NETTOYAGE_JOURNAL=2weeks          # ou non
+# CROSS_SEED_CONFIG="$HOME/cross-seed/config/config.js"   # config.js lu sur l'hôte (linkDirs, dataDirs)
+# CROSS_SEED_QBIT_URL="http://utilisateur:motdepasse@127.0.0.1:8080"   # défaut : torrentClients de config.js
+# CROSS_SEED_LIENS=non              # pas de contrôle des liens physiques au démarrage de cross-seed
 # ACMEFRAG_CIBLE="/chemin/vers/disque/Videos"
 # ACMEFRAG_SANTE_CIBLE="/chemin/vers/disque"  # santé SMART (défaut : ACMEFRAG_CIBLE ; "" = rien)
 # ACMEFRAG_DELAI_SANTE=120          # s

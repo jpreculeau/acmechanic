@@ -51,7 +51,7 @@ acmechanic --liste                      # vérifier la détection
 sudo ln -s ~/acmechanic/acmechanic.sh /usr/local/bin/acmechanic
 ```
 
-**Dépendances** : `bash` ≥ 5, `docker` + plugin `compose`, `curl`, `tar`, `flock`, `timeout` (coreutils). Optionnel : `nala`, `flatpak`, `systemd-run` (bridage), `fuser` (paquet `psmisc` : nomme le processus qui tient un verrou), une [Nerd Font](https://www.nerdfonts.com/) pour les icônes.
+**Dépendances** : `bash` ≥ 5, `docker` + plugin `compose`, `curl`, `tar`, `flock`, `timeout` (coreutils). Optionnel : `nala`, `flatpak`, `systemd-run` (bridage), `fuser` (paquet `psmisc` : nomme le processus qui tient un verrou), `jq` (réponses de l'API qBittorrent : liens cross-seed orphelins), une [Nerd Font](https://www.nerdfonts.com/) pour les icônes.
 
 Pour les mises à jour système, `sudo` doit être utilisable sans mot de passe (`sudo -v` avant de lancer, ou règle `sudoers` dédiée) ; sinon ces étapes sont simplement **ignorées**.
 
@@ -135,6 +135,9 @@ Ne modifiez pas `config.sh` : surchargez ses variables dans **`local.conf`** (ig
 | `BACKUP_ROOT` | `~/backups` | Racine des sauvegardes |
 | `BACKUP_GARDER` | `5` | Archives conservées par service |
 | `LIMITE_CPU` / `LIMITE_RAM_SOUPLE` / `LIMITE_RAM_DURE` | `200%` / `1G` / `2G` | Bornes du cgroup de chaque service |
+| `CROSS_SEED_CONFIG` | `<CROSS_SEED_DONNEES>/config/config.js` | `cross-seed` et `nettoyage` : le `config.js` de cross-seed, lu sur l'hôte (`linkDirs`, `dataDirs`, `torrentClients`) |
+| `CROSS_SEED_QBIT_URL` | celle de `config.js` | API qBittorrent vue de l'hôte, identifiants compris (`http://utilisateur:motdepasse@127.0.0.1:8080`) ; vide = l'entrée `qbittorrent:` de `torrentClients` |
+| `CROSS_SEED_LIENS` | `oui` | `cross-seed` : contrôle des liens physiques au démarrage (`non` = ignoré) |
 | `CLAUDE_REPRISE_ATTENTE` | `30` | `outils-ia` : attente (s) avant le second et dernier essai d'un `claude update` en échec (registre npm parfois injoignable) |
 | `FLATPAK_SAUVEGARDES` | `()` | `nom:identifiant.flatpak` à sauvegarder |
 | `SERVICES_CONNUS` + `config_service()` | vides | Services restaurables par `restore.sh` |

@@ -262,6 +262,181 @@ check "espace_reel_h lisible ; meme_fs vrai sur le meme FS, faux sur /proc ou un
 	eq "$(sed -n 2p <<<"$out")" "1.0 Mio meme autre absent"
 check "noter_bilan : ligne INFO du bilan, aucun compteur d'etape touche" eq "$(sed -n '3,4p' <<<"$out" | tr '\n' /)" "1/0000/"
 
+echo "cross-seed : config.js, qBittorrent et liens (lib/xseed.sh)"
+XS="$TMP/xs"; mkdir -p "$XS/config" "$XS/bin" "$XS/data/Film.A" "$XS/data2" "$XS/links/trackerA" "$XS/links/trackerB"
+cat >"$XS/config/config.js" <<EOS
+// config.js de test
+module.exports = {
+  torrentClients: ["qbittorrent:http://moi:s3cret@127.0.0.1:8080"], // identifiants
+  // linkDirs: ["/commente"],
+  dataDirs: [
+    "$XS/data",
+    '$XS/data2'   // simples quotes
+  ],
+  linkDirs: ["$XS/links"],
+  matchMode: "flexible",
+};
+EOS
+# curl bouchonne : API qBittorrent (login, torrents/info, app/preferences)
+cat >"$XS/bin/curl" <<'EOS'
+#!/bin/sh
+out=""; url=""; pass=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-o) out="$2"; shift ;;
+	--data-urlencode) case "$2" in password@*) pass="$(cat "${2#password@}")" ;; password=*) pass="ARGUMENT" ;; esac; shift ;;
+	-c | -b | -m | -w) shift ;;
+	-*) ;;
+	*) url="$1" ;;
+	esac
+	shift
+done
+echo "$url" >>"${CURL_LOG:-/dev/null}"
+case "$url" in
+*injoignable*) exit 7 ;;
+*/auth/login) echo "$pass" >>"${CURL_PASS:-/dev/null}"
+	case "$pass" in s3cret) printf 'Ok.' ;; banni) printf 'Banned' ;; *) printf 'Fails.' ;; esac ;;
+*/torrents/info) cat "$QBIT_INFO" >"$out"; printf 200 ;;
+*/app/preferences) printf '{"save_path":"%s"}' "$QBIT_SAVE" >"$out"; printf 200 ;;
+*/app/version) [ "${QBIT_SANS_MDP:-non}" = oui ] && printf 200 || printf 403 ;;
+*) printf 404 ;;
+esac
+EOS
+chmod +x "$XS/bin/curl"
+printf '[{"name":"Film A","content_path":"%s/links/trackerA/Film.A"},{"name":"B","content_path":"%s/links/trackerB/fichier.mkv"}]\n' \
+	"$XS" "$XS" >"$XS/info.json"
+echo film >"$XS/data/Film.A/film.mkv"
+mkdir -p "$XS/links/trackerA/Film.A"; ln "$XS/data/Film.A/film.mkv" "$XS/links/trackerA/Film.A/film.mkv"
+ln "$XS/data/Film.A/film.mkv" "$XS/links/trackerA/ancien.mkv"   # orphelin, autre nom conserve
+ln "$XS/data/Film.A/film.mkv" "$XS/links/trackerB/fichier.mkv"
+echo seul >"$XS/links/trackerB/seul.mkv"                            # orphelin, dernier nom : donnees
+printf '%s/links/trackerA/Film.A\n%s/links/trackerB/fichier.mkv\n' "$XS" "$XS" >"$XS/contenus"   # = qbit_chemins_contenus
+out="$(bash -c 'SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"
+	CROSS_SEED_CONFIG="$1/config/config.js"; source "$ACMECHANIC_HOME/lib/xseed.sh"
+	xseed_liens_dossiers | tr "\n" " "; echo
+	xseed_donnees_dossiers | tr "\n" " "; echo
+	config_js_liste "$CROSS_SEED_CONFIG" matchMode; config_js_liste "$CROSS_SEED_CONFIG" absent; echo "rc=$?"
+	qbit_url
+	CROSS_SEED_QBIT_URL=http://x/ qbit_url
+	xseed_liens_par_tracker "$1/links" | tr "\t\n" ":/"; echo
+	xseed_liens_orphelins "$1/contenus" "$1/links" | sort | tr "\n" " "; echo
+	xseed_protege "$1/links/trackerA/x" && echo protege-linkdir
+	xseed_protege "/mnt/d/xseed-links/t/x" && echo protege-nom
+	xseed_protege "$1/data/x" || echo libre
+	M="$1"; docker() { printf "%s\t%s\n" "$M" "$M"; }
+	xseed_monte_a_l_identique c "$1/links"; echo "monte=$?"
+	docker() { printf "%s\t%s\n" "/hote$M" "$M"; }
+	xseed_monte_a_l_identique c "$1/links"; echo "autre-source=$?"
+	docker() { return 1; }
+	xseed_monte_a_l_identique c "$1/links"; echo "inspect=$?"
+' _ "$XS" 2>&1)"
+check "config.js : linkDirs lu (cle commentee ignoree)" eq "$(sed -n 1p <<<"$out")" "$XS/links "
+check "config.js : dataDirs sur plusieurs lignes, simples quotes, commentaire de fin" \
+	eq "$(sed -n 2p <<<"$out")" "$XS/data $XS/data2 "
+check "config.js : valeur simple ; cle absente = rien, code 0" eq "$(sed -n '3,4p' <<<"$out" | tr '\n' /)" "flexible/rc=0/"
+check "qbit_url : torrentClients de config.js, CROSS_SEED_QBIT_URL prioritaire" \
+	eq "$(sed -n '5,6p' <<<"$out" | tr '\n' /)" "http://moi:s3cret@127.0.0.1:8080/http://x//"
+check "liens par tracker : nombre de fichiers par sous-dossier" eq "$(sed -n 7p <<<"$out")" "2:trackerA/2:trackerB/"
+check "liens orphelins : les fichiers qu'aucun content_path ne couvre" \
+	eq "$(sed -n 8p <<<"$out")" "$XS/links/trackerA/ancien.mkv $XS/links/trackerB/seul.mkv "
+check "xseed_protege : sous un linkDir, ou composant xseed-links ; libre ailleurs" \
+	eq "$(sed -n '9,11p' <<<"$out" | tr '\n' /)" "protege-linkdir/protege-nom/libre/"
+check "montage identique : trouve sous un volume <chemin>:<chemin> ; source differente ou inspect en echec refuses" \
+	eq "$(sed -n '12,14p' <<<"$out" | tr '\n' /)" "monte=0/autre-source=1/inspect=2/"
+# Session qBittorrent : identifiants decodes, cookie, API, refus, injoignable.
+# Un script .sh (pas bash -c) : les fichiers temporaires sont supprimes a la sortie.
+cat >"$XS/session.sh" <<'EOS'
+SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"; source "$ACMECHANIC_HOME/lib/xseed.sh"
+qbit_session "http://moi:s3cret@127.0.0.1:8080/"; echo "session=$? $QBIT_BASE"
+qbit_session "http://moi:banni@127.0.0.1:8080"; echo "banni=$? $(test -e "$QBIT_REFUS" && echo marque || echo libre)"
+qbit_chemins_contenus | wc -l; qbit_dossier_arrivee
+qbit_session "http://moi:faux@127.0.0.1:8080"; echo "refus=$?"
+qbit_session "http://a:b@injoignable:1"; echo "injoignable=$?"
+qbit_session ""; echo "vide=$?"
+QBIT_SANS_MDP=oui qbit_session "http://moi:faux@127.0.0.1:8080"; echo "sans-mdp=$?"
+qbit_session "http://moi:p%40s%5Cs@h/"; echo "decode=$?"
+qbit_session "http://moi:p%40s%5Cs@h/"; echo "memorise=$? $(cat "$QBIT_REFUS" | wc -l)"
+qbit_session "http://autre:p%40s%5Cs@h/"; echo "autre-url=$?"
+qbit_session "http://127.0.0.1:8080"; echo "sans-ident=$?"
+echo "$QBIT_COOKIE"
+EOS
+out="$(PATH="$XS/bin:$PATH" QBIT_INFO="$XS/info.json" QBIT_SAVE="$XS/data" CURL_LOG="$XS/curl.log" CURL_PASS="$XS/pass.log" \
+	QBIT_REFUS="$XS/refus" bash "$XS/session.sh" 2>&1)"
+check "qbit_session : ouverte, URL sans identifiants ni / final" eq "$(sed -n 1p <<<"$out")" "session=0 http://127.0.0.1:8080"
+check "qbit_session : reponse autre que Fails. (bannissement, erreur) => 1 sans refus memorise" eq "$(sed -n 2p <<<"$out")" "banni=1 libre"
+check "qbit_chemins_contenus et qbit_dossier_arrivee lus par l'API" eq "$(sed -n '3,4p' <<<"$out" | tr '\n' /)" "2/$XS/data/"
+check "qbit_session : refus 1, injoignable 2, URL vide 3" eq "$(sed -n '5,7p' <<<"$out" | tr '\n' /)" "refus=1/injoignable=2/vide=3/"
+check "qbit_session : identifiants refuses mais API ouverte a l'hote sans mot de passe => 0" eq "$(sed -n 8p <<<"$out")" "sans-mdp=0"
+check "qbit_session : mot de passe decode (%40, %5C), jamais en argument de processus" \
+	eq "$(sed -n 9p <<<"$out")/$(grep -c '^p@s\\s$' "$XS/pass.log")/$(grep -c ARGUMENT "$XS/pass.log")" "decode=1/2/0"
+check "qbit_session : refus memorise => pas de nouvel essai avec la meme URL, essai avec une autre" \
+	eq "$(sed -n '10,11p' <<<"$out" | tr '\n' /)/$(grep -c auth/login "$XS/curl.log")" "memorise=1 1/autre-url=1//5"
+check "qbit_session : authentification requise sans identifiants dans l'URL => 4" eq "$(sed -n 12p <<<"$out")" "sans-ident=4"
+check "qbit_session : API d'abord essayee sans identifiants (login seulement sur 403)" \
+	eq "$(grep -c app/version "$XS/curl.log")" "9"
+check "qbit_session : seul l'hote est appele (jamais les identifiants dans l'URL)" \
+	not grep -q 's3cret' "$XS/curl.log"
+check "qbit_session : fichiers temporaires supprimes a la sortie" \
+	bash -c '[ -n "$1" ] && [ ! -e "$1" ] && [ ! -e "$1.lock" ]' _ "$(tail -n 1 <<<"$out")"
+
+echo "cross-seed : controles au demarrage (bouchons)"
+# Le service entier, avec lib/service.sh deja « charge » : docker_* bouchonnes,
+# docker inspect bouchonne par XS_MONTAGES (source<TAB>destination).
+cat >"$XS/svc.sh" <<'EOS'
+SERVICE_NAME=cross-seed; source "$ACMECHANIC_HOME/lib/common.sh"
+source "$ACMECHANIC_HOME/config.sh"; _SERVICE_SH_LOADED=1
+etape() { run_etape "$@"; }
+docker_preparer() { :; }
+docker_standard() { echo "docker_standard $*" >>"$XS_LOG"; }
+docker_terminer() { bilan_service "Bilan"; exit $?; }
+docker() { [ "$1" = inspect ] && cat "$XS_MONTAGES"; }
+source "$ACMECHANIC_HOME/bibliotheque/cross-seed/cross-seed.sh"
+EOS
+printf '%s\t%s\n' "$XS" "$XS" >"$XS/montages"
+xs() {  # xs [VAR=valeur...] : lance le service cross-seed bouchonne, renvoie son code
+	: >"$XS/svc.log"; : >"$XS/att"; : >"$LOG_DIR/cross-seed.log"
+	env PATH="$XS/bin:$PATH" QBIT_INFO="$XS/info.json" QBIT_SAVE="$XS/data/" XS_LOG="$XS/svc.log" \
+		XS_MONTAGES="$XS/montages" CROSS_SEED_CONFIG="$XS/config/config.js" ACMECHANIC_ATTENTION_FICHIER="$XS/att" QBIT_REFUS="$XS/refus" "$@" \
+		bash "$XS/svc.sh" >"$XS/svc.out" 2>&1
+}
+xs; rc=$?
+check "cross-seed : tout en ordre => aucun point d'attention, conteneur maintenu, code 0" \
+	eq "$rc/$(wc -c <"$XS/att")/$(grep -c '^docker_standard cross-seed crossseed/cross-seed:' "$XS/svc.log")" "0/0/1"
+check "cross-seed : bilan, liens par tracker" \
+	eq "$(grep -c -e 'liens trackerA  *INFO  *2$' -e 'liens trackerB  *INFO  *2$' "$LOG_DIR/cross-seed.log")" "2"
+check "cross-seed : bilan, liens orphelins" grep -q 'liens orphelins  *INFO  *2 sur 4' "$LOG_DIR/cross-seed.log"
+xs QBIT_SAVE="$XS/debranche"; rc=$?
+check "cross-seed : dossier d'arrivee de qBittorrent absent de l'hote => point d'attention, code 0" \
+	eq "$rc/$(grep -c "dossier absent sur l.hote : $XS/debranche" "$XS/att")/$(grep -c 'hardlink impossible' "$XS/att")" "0/1/0"
+# linkDir sur un autre systeme de fichiers : hardlink impossible => point d'attention
+AUTRE_FS="/dev/shm/acmechanic-test-$$"
+if mkdir -p "$AUTRE_FS/links" 2>/dev/null && [ "$(stat -c %d "$AUTRE_FS")" != "$(stat -c %d "$XS")" ]; then
+	sed "s#\"$XS/links\"#\"$AUTRE_FS/links\"#" "$XS/config/config.js" >"$XS/config/autre-fs.js"
+	xs CROSS_SEED_CONFIG="$XS/config/autre-fs.js"; rc=$?
+	check "cross-seed : linkDir sur un autre FS => « hardlink impossible pour <dataDir> : injection en echec », code 0" \
+		eq "$rc/$(grep -c "hardlink impossible pour $XS/data : injection en echec" "$XS/att")" "0/1"
+	check "cross-seed : linkDir absent de l'hote signale, sans faux « hardlink impossible »" \
+		eq "$(rmdir "$AUTRE_FS/links"; xs CROSS_SEED_CONFIG="$XS/config/autre-fs.js"; grep -c "linkDir absent sur l.hote : $AUTRE_FS/links" "$XS/att")/$(grep -c 'hardlink impossible' "$XS/att")" "1/2"
+	rm -rf "$AUTRE_FS"
+else
+	echo "  (saute : pas de second systeme de fichiers inscriptible)"
+fi
+: >"$XS/montages"   # conteneur sans ces volumes
+xs; rc=$?
+check "cross-seed : chemin non monte a l'identique dans le conteneur => point d'attention, code 0" \
+	eq "$rc/$(grep -c "n'est pas monte dans le conteneur au meme chemin" "$XS/att")" "0/3"
+printf '%s\t%s\n' "$XS" "$XS" >"$XS/montages"
+xs QBIT_SAVE="$XS" CROSS_SEED_QBIT_URL="http://moi:faux@127.0.0.1:8080"; rc=$?
+check "cross-seed : identifiants qBittorrent refuses => avertissement, pas d'orphelins, code 0" \
+	eq "$rc/$(grep -c 'identifiants qBittorrent refuses' "$LOG_DIR/cross-seed.log")/$(grep -c 'liens orphelins' "$LOG_DIR/cross-seed.log")" "0/1/0"
+xs CROSS_SEED_LIENS=non; rc=$?
+check "cross-seed : CROSS_SEED_LIENS=non => controle ignore, code 0" \
+	eq "$rc/$(grep -c 'liens physiques -- ignore : desactive' "$LOG_DIR/cross-seed.log")" "0/1"
+sed '/linkDirs/d' "$XS/config/config.js" >"$XS/config/sans-liens.js"
+xs CROSS_SEED_CONFIG="$XS/config/sans-liens.js"; rc=$?
+check "cross-seed : pas de linkDirs => rien a controler, code 0" \
+	eq "$rc/$(grep -c 'liens physiques non utilises' "$LOG_DIR/cross-seed.log")/$(wc -c <"$XS/att")" "0/1/0"
+
 echo "ollama (installeur officiel, bouchons)"
 O="$TMP/ollama"; mkdir -p "$O"; echo 1.0.0 >"$O/ov"; : >"$O/systemctl.log"
 cat >"$O/ollama" <<EOS

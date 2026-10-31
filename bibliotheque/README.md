@@ -10,7 +10,7 @@ Des scripts de maintenance **prêts à l'emploi**, tous bâtis sur le même moul
 | [`plex`](plex/) | `plexinc/pms-docker` | `:32400/identity` | `config/` (hors cache, métadonnées, logs) |
 | [`audiobookshelf`](audiobookshelf/) | `advplyr/audiobookshelf` | `:13378/healthcheck` | `config/ metadata/` |
 | [`arr`](arr/) | `linuxserver/{sonarr,radarr,prowlarr,lidarr}` | `:<port>/ping` | un dossier par service (hors logs, MediaCover) |
-| [`cross-seed`](cross-seed/) | `crossseed/cross-seed` | `:2468/api/ping` | `config/` |
+| [`cross-seed`](cross-seed/) | `crossseed/cross-seed` | `:2468/api/ping` | `config/` (+ contrôle des liens physiques, voir ci-dessous) |
 | [`syncthing`](syncthing/) | `syncthing/syncthing` | `:8384/rest/noauth/health` | `config/` (clés, dossiers partagés) |
 | [`vaultwarden`](vaultwarden/) | `vaultwarden/server` | `:8081/alive` | `data/` (hors cache d'icônes) |
 | [`uptime-kuma`](uptime-kuma/) | `louislam/uptime-kuma` | `:3001` | `data/` |
@@ -21,6 +21,8 @@ Des scripts de maintenance **prêts à l'emploi**, tous bâtis sur le même moul
 | [`_modele`](_modele/) | à vous | à vous | à vous |
 
 Images hors Docker Hub (Forgejo sur Codeberg, Open WebUI sur ghcr.io) : l'image est tirée à chaque passage et le conteneur n'est recréé que si elle a changé.
+
+**cross-seed et liens physiques** (`linkDirs` de `config.js`, `matchMode: "flexible"`) : avant la mise à jour du conteneur, chaque `dataDir` et le dossier d'arrivée de qBittorrent doivent avoir un `linkDir` sur le même système de fichiers — sinon point d'attention « hardlink impossible pour \<dossier\> : injection en échec » — et être montés dans le conteneur au même chemin que sur l'hôte (les chemins viennent de qBittorrent). Bilan : liens par tracker, liens orphelins (aucun torrent de qBittorrent ne pointe dessus). Rien n'est supprimé là ; le ménage des orphelins est **proposé** par `nettoyage`. Réglages : `CROSS_SEED_CONFIG` (`config.js` lu sur l'hôte, défaut `<CROSS_SEED_DONNEES>/config/config.js`), `CROSS_SEED_QBIT_URL` (API qBittorrent vue de l'hôte, identifiants compris ; défaut : l'entrée `qbittorrent:` de `torrentClients`), `CROSS_SEED_LIENS=non` pour désactiver ; `jq` requis pour l'API. L'API est d'abord essayée sans identifiants (qBittorrent peut accepter l'hôte sans mot de passe) ; un refus des identifiants est mémorisé dans `~/.cache/acmechanic-qbit-refus` et le login n'est pas retenté tant que l'URL n'a pas changé (qBittorrent bannit l'hôte après quelques échecs, ce qui couperait aussi cross-seed) : après une correction côté qBittorrent, supprimez ce fichier. Seul un refus explicite des identifiants est mémorisé (pas un bannissement en cours ni une erreur passagère) ; le mot de passe est percent-encodé dans l'URL, comme dans `config.js`.
 
 ## 🔧 Maintenance de la machine
 
@@ -63,7 +65,7 @@ Aucun script n'est à modifier : tout se surcharge dans `local.conf` (modèle : 
 
 **Canal de pointe** : avec `develop`, `edge`, `unstable`…, `choisir_tag` compare la date de publication du canal et de `latest` et retient **le plus récent** — un canal abandonné ne vous fige jamais sur une vieille image.
 
-**Maintenance** — chaque service documente ses réglages en tête de script : `DEPOTS_GIT`, `DEPOTS_APPLIQUER`, `CHEZMOI_VERIFIER` ; `IA_OUTILS`, `IA_NPM`, `OLLAMA_MODELES_MAJ` ; `NETTOYAGE_*` ; `ACMEFRAG_DOSSIER`, `ACMEFRAG_CIBLE`, `ACMEFRAG_SANTE_CIBLE`, `ACMEFRAG_DELAI_SANTE`.
+**Maintenance** — chaque service documente ses réglages en tête de script : `DEPOTS_GIT`, `DEPOTS_APPLIQUER`, `CHEZMOI_VERIFIER` ; `IA_OUTILS`, `IA_NPM`, `OLLAMA_MODELES_MAJ` ; `NETTOYAGE_*` ; `ACMEFRAG_DOSSIER`, `ACMEFRAG_CIBLE`, `ACMEFRAG_SANTE_CIBLE`, `ACMEFRAG_DELAI_SANTE` ; `CROSS_SEED_CONFIG`, `CROSS_SEED_QBIT_URL`, `CROSS_SEED_LIENS` (liens physiques de cross-seed : `lib/xseed.sh` ; `jq` requis pour l'API qBittorrent).
 
 ## 🧩 Contrat d'un compose compatible
 
