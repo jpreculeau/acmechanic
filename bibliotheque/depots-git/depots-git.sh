@@ -6,7 +6,8 @@
 # modifications locales ou un historique divergent ne sont JAMAIS
 # ecrases : le script le signale et passe au suivant. L'avance rapide est
 # aussi reportee tant qu'une unite systemd declaree pour ce depot tourne
-# (DEPOTS_GIT_UNITES).
+# (DEPOTS_GIT_UNITES) ; apres elle, les services declares sont redemarres
+# (DEPOTS_GIT_RELANCER).
 #
 # Acmechanic lui-meme n'est pas traite ici : il se met a jour seul, en fin
 # de run (ACMECHANIC_AUTO_MAJ), pour ne pas modifier des scripts en cours
@@ -35,37 +36,51 @@ if [[ -z "${DEPOTS_GIT+x}" ]]; then DEPOTS_GIT=(); fi
 # un service permanent bloquerait l'avance a chaque passage.
 # ex. declare -A DEPOTS_GIT_UNITES=(["$HOME/outils/mon-script"]="mon-script.service")
 if ! declare -p DEPOTS_GIT_UNITES >/dev/null 2>&1; then declare -A DEPOTS_GIT_UNITES=(); fi
+# Services permanents qui executent le code d'un depot : redemarres
+# (try-restart : jamais demarres s'ils sont arretes) apres une avance rapide,
+# sinon ils garderaient l'ancien code en memoire.
+# ex. declare -A DEPOTS_GIT_RELANCER=(["$HOME/outils/mon-script"]="mon-script-web.service")
+if ! declare -p DEPOTS_GIT_RELANCER >/dev/null 2>&1; then declare -A DEPOTS_GIT_RELANCER=(); fi
 : "${DEPOTS_APPLIQUER:=oui}"       # non = signaler seulement
 : "${CHEZMOI_VERIFIER:=oui}"       # non = ignorer chezmoi
 # -------------------------------------------------------------------------------
 
 titre "MISE A JOUR DES DEPOTS GIT"
 verifier_commandes git || { err "git absent, arret."; exit 1; }
-# Sans -A, ${DEPOTS_GIT_UNITES[chemin]} serait un calcul d'indice : aucune
-# unite ne serait trouvee et le code avancerait sous un processus en cours.
-if [[ "$(declare -p DEPOTS_GIT_UNITES)" != "declare -A"* ]]; then
-	err "DEPOTS_GIT_UNITES doit etre un tableau associatif (declare -A dans local.conf), arret."
-	exit 1
-fi
+# Sans -A, ${TABLEAU[chemin]} serait un calcul d'indice : aucune unite ne
+# serait trouvee, et le code avancerait sous un processus en cours ou
+# resterait ancien dans un service jamais redemarre.
+for tableau in DEPOTS_GIT_UNITES DEPOTS_GIT_RELANCER; do
+	if [[ "$(declare -p "$tableau")" != "declare -A"* ]]; then
+		err "$tableau doit etre un tableau associatif (declare -A dans local.conf), arret."
+		exit 1
+	fi
+done
 
 # retard <depot> : nombre de commits de l'amont absents localement.
 retard() { git -C "$1" rev-list --count 'HEAD..@{u}' 2>/dev/null || echo 0; }
+
+# unites_du_depot <tableau> <depot> : unites declarees pour ce depot dans le
+# tableau associatif nomme, separees par des espaces (toutes les cles qui le
+# designent). Les cles se comparent apres readlink -f (« / » final, lien
+# symbolique) ; maj_depot a deja verifie que le depot existe.
+unites_du_depot() {
+	local -n _unites_tab="$1"
+	local cle cible
+	cible="$(readlink -f "$2")"
+	for cle in "${!_unites_tab[@]}"; do
+		[ "$(readlink -f "$cle")" = "$cible" ] && printf '%s ' "${_unites_tab[$cle]}"
+	done
+}
 
 # unite_en_cours <depot> : affiche « <unite> en cours (<etat>) » pour la
 # premiere unite de DEPOTS_GIT_UNITES qui n'est ni inactive ni en echec ;
 # code 1 si aucune. L'etat affiche fait foi, pas le code : `is-active` rend 3
 # pour un service oneshot en cours (« activating »). Un etat illisible bloque
 # aussi (on ne change pas un code peut-etre en execution).
-# Les cles se comparent apres readlink -f (« / » final, lien symbolique) ;
-# maj_depot a deja verifie que le depot existe.
 unite_en_cours() {
-	local cle cible unite etat liste unites=()
-	cible="$(readlink -f "$1")"
-	for cle in "${!DEPOTS_GIT_UNITES[@]}"; do
-		[ "$(readlink -f "$cle")" = "$cible" ] || continue
-		read -ra liste <<<"${DEPOTS_GIT_UNITES[$cle]}"
-		unites+=("${liste[@]}")
-	done
+	local unite etat unites
+	read -ra unites <<<"$(unites_du_depot DEPOTS_GIT_UNITES "$1")"
 	for unite in "${unites[@]}"; do
 		etat="$(timeout 10 systemctl --user is-active -- "$unite" 2>/dev/null)"
 		case "$etat" in
@@ -78,7 +93,7 @@ unite_en_cours() {
 }
 
 maj_depot() {
-	local depot="$1" nom n avant apres occupe
+	local depot="$1" nom n avant apres occupe unite relancer
 	nom="$(basename "$depot")"
 	if ! git -C "$depot" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 		ignorer_etape "$nom" "pas un depot git : $depot"
@@ -125,6 +140,18 @@ maj_depot() {
 		NB_MAJ=$((NB_MAJ + 1))
 		enregistrer_version "$nom" "$avant" "$apres"
 		git -C "$depot" log --oneline "$avant..$apres" 2>/dev/null | head -10 | sed 's/^/    /'
+		read -ra relancer <<<"$(unites_du_depot DEPOTS_GIT_RELANCER "$depot")"
+		# 200 s : arret puis demarrage, chacun borne a 90 s par defaut par systemd.
+		# Une unite aux delais plus longs est vue en echec au-dela, alors que
+		# systemd poursuit le redemarrage. Un echec n'est pas retente : au
+		# passage suivant, le depot est a jour.
+		for unite in "${relancer[@]}"; do
+			etape "$nom : redemarrage de $unite" 200 systemctl --user try-restart -- "$unite" ||
+				point_attention "$nom : $unite non redemarre apres l'avance rapide ($avant -> $apres)" \
+					"systemctl --user restart -- $unite" \
+					"le service est arrete ou tourne sur l'ancien code, et les passages suivants ne le relanceront pas (depot a jour)" \
+					"redemarre le service sur le nouveau code ; s'il echoue encore : journalctl --user-unit $unite, ou retour arriere par git -C $depot reset --keep $avant puis systemctl --user restart -- $unite, en retirant le depot de DEPOTS_GIT le temps de corriger (sinon le passage suivant refait l'avance)"
+		done
 	fi
 }
 
@@ -154,28 +181,38 @@ verifier_chezmoi() {
 if [ ${#DEPOTS_GIT[@]} -eq 0 ]; then
 	ignorer_etape "Depots git" "aucun depot declare (DEPOTS_GIT dans local.conf)"
 fi
-# Une cle sans depot (faute de frappe, « ~ » non developpe) ou une unite
-# inconnue ne protege rien, un .timer bloque toujours : le dire plutot que de
-# laisser croire a une protection.
-for cle in "${!DEPOTS_GIT_UNITES[@]}"; do
-	trouve=non chemin="$(readlink -f "$cle")"
-	for depot in "${DEPOTS_GIT[@]}"; do
-		[ -n "$chemin" ] && [ "$chemin" = "$(readlink -f "$depot")" ] && trouve=oui
+# verifier_unites <tableau> : une cle sans depot (faute de frappe, « ~ » non
+# developpe) ou une unite inconnue ne sert a rien, un .timer attendu bloque
+# toujours : le dire plutot que de laisser croire a une protection.
+verifier_unites() {
+	local -n _verif_tab="$1"
+	local cle chemin depot trouve unite liste effet
+	case "$1" in
+		DEPOTS_GIT_UNITES) effet="l'avance rapide n'attend pas" ;;
+		*) effet="une avance rapide ne redemarre pas" ;;
+	esac
+	for cle in "${!_verif_tab[@]}"; do
+		trouve=non chemin="$(readlink -f "$cle")"
+		for depot in "${DEPOTS_GIT[@]}"; do
+			[ -n "$chemin" ] && [ "$chemin" = "$(readlink -f "$depot")" ] && trouve=oui
+		done
+		[ "$trouve" = oui ] ||
+			point_attention "$1 : $cle ne correspond a aucun depot de DEPOTS_GIT, ses unites sont sans effet" "" \
+				"$effet ses unites" "corriger la cle dans local.conf (chemin ecrit comme dans DEPOTS_GIT)"
+		read -ra liste <<<"${_verif_tab[$cle]}"
+		for unite in "${liste[@]}"; do
+			case "$1:$unite" in
+				DEPOTS_GIT_UNITES:*.timer) point_attention "$1 : $unite est un timer, toujours actif" "" \
+					"l'avance rapide de $cle sera reportee a chaque passage" "declarer le .service qu'il declenche" ;;
+			esac
+			[ "$(timeout 10 systemctl --user show -p LoadState --value -- "$unite" 2>/dev/null)" = not-found ] &&
+				point_attention "$1 : unite $unite inconnue de systemd --user" "" \
+					"$effet cette unite" "corriger le nom de l'unite dans local.conf"
+		done
 	done
-	[ "$trouve" = oui ] ||
-		point_attention "DEPOTS_GIT_UNITES : $cle ne correspond a aucun depot de DEPOTS_GIT, ses unites ne sont pas controlees" "" \
-			"l'avance rapide de ce depot n'attend pas ses unites" "corriger la cle dans local.conf (chemin ecrit comme dans DEPOTS_GIT)"
-	read -ra liste <<<"${DEPOTS_GIT_UNITES[$cle]}"
-	for unite in "${liste[@]}"; do
-		case "$unite" in
-			*.timer) point_attention "DEPOTS_GIT_UNITES : $unite est un timer, toujours actif" "" \
-				"l'avance rapide de $cle sera reportee a chaque passage" "declarer le .service qu'il declenche" ;;
-		esac
-		[ "$(timeout 10 systemctl --user show -p LoadState --value -- "$unite" 2>/dev/null)" = not-found ] &&
-			point_attention "DEPOTS_GIT_UNITES : unite $unite inconnue de systemd --user" "" \
-				"une unite inconnue est vue inactive : l'avance rapide de $cle ne l'attend pas" "corriger le nom de l'unite dans local.conf"
-	done
-done
+}
+verifier_unites DEPOTS_GIT_UNITES
+verifier_unites DEPOTS_GIT_RELANCER
 for depot in "${DEPOTS_GIT[@]}"; do
 	maj_depot "$depot"
 done

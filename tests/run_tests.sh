@@ -165,6 +165,53 @@ PATH="$G/bin:$PATH" env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depot
 check "depots-git : tableau non associatif, arret" eq "$rc" "1"
 check "depots-git : tableau non associatif, dit au journal" grep -q 'DEPOTS_GIT_UNITES doit etre un tableau associatif' "$LOG_DIR/depots-git.log"
 check "depots-git : tableau non associatif, rien n'avance" not test "$(git -C "$G/occupe" rev-parse HEAD)" = "$(git -C "$G/occupe.git" rev-parse HEAD)"
+# DEPOTS_GIT_RELANCER : apres une avance rapide (cle avec « / » final), ses
+# unites sont redemarrees (try-restart) sur le nouveau code, un echec compte
+# et propose une action ; depot a jour, avance reportee ou merge en echec
+# (historique diverge) : aucun redemarrage ; cle sans depot, unite inconnue
+# (try-restart rend 5, comme le vrai) : signalees ; tableau non associatif :
+# arret.
+nouveau_depot web; publier web
+nouveau_depot statique
+nouveau_depot diverge; publier diverge; echo local >>"$G/diverge/f"; git -C "$G/diverge" commit -qam local
+cat >"$G/bin/systemctl" <<'EOF'
+#!/bin/sh
+if [ "$1 $2 $3 $4 $5 $6" = "--user show -p LoadState --value --" ]; then
+	case "$7" in inconnue.service) echo not-found ;; *) echo loaded ;; esac
+	exit 0
+fi
+if [ "$1 $2 $3" = "--user try-restart --" ]; then
+	echo "$4" >>"$RELANCES"
+	[ "$4" = web.service ] && git -C "$WEB_DEPOT" rev-parse HEAD >"$RELANCES.head"
+	case "$4" in rate.service) exit 1 ;; inconnue.service) exit 5 ;; esac
+	exit 0
+fi
+[ "$1 $2 $3" = "--user is-active --" ] || exit 1
+case "$4" in occupe.service) echo activating ;; *) echo inactive ;; esac
+exit 3
+EOF
+{
+	printf 'DEPOTS_GIT=("%s" "%s" "%s" "%s")\nCHEZMOI_VERIFIER=non\n' "$G/web" "$G/statique" "$G/occupe" "$G/diverge"
+	printf 'declare -A DEPOTS_GIT_UNITES=(["%s"]="occupe.service")\n' "$G/occupe"
+	printf 'declare -A DEPOTS_GIT_RELANCER=(["%s/"]="web.service rate.service inconnue.service" ["%s"]="jamais.service" ["%s"]="jamais.service" ["%s"]="jamais.service" ["%s"]="x.service")\n' \
+		"$G/web" "$G/statique" "$G/occupe" "$G/diverge" "$G/nulle/part"
+} >"$G/acm/local.conf"
+export RELANCES="$G/relances" WEB_DEPOT="$G/web"; : >"$RELANCES"
+PATH="$G/bin:$PATH" env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depots-git.sh" >/dev/null 2>&1; rc=$?
+out="$(cat "$LOG_DIR/depots-git.log")"
+check "depots-git relancer : avance rapide appliquee" eq "$(git -C "$G/web" rev-parse HEAD)" "$(git -C "$G/web.git" rev-parse HEAD)"
+check "depots-git relancer : unites redemarrees, rien d'autre" eq "$(tr '\n' ' ' <"$RELANCES")" "web.service rate.service inconnue.service "
+check "depots-git relancer : redemarrage sur le nouveau code" eq "$(cat "$RELANCES.head")" "$(git -C "$G/web.git" rev-parse HEAD)"
+check "depots-git relancer : echec du redemarrage compte" not test "$rc" -eq 0
+check "depots-git relancer : echec dit au journal" grep -q 'web : redemarrage de rate.service -- echec' <<<"$out"
+check "depots-git relancer : echec, action proposee" grep -q 'web : rate.service non redemarre apres l.avance rapide .* -> systemctl --user restart -- rate.service' <<<"$out"
+check "depots-git relancer : cle sans depot signalee" grep -q "DEPOTS_GIT_RELANCER : $G/nulle/part ne correspond a aucun depot" <<<"$out"
+check "depots-git relancer : unite inconnue signalee" grep -q 'DEPOTS_GIT_RELANCER : unite inconnue.service inconnue de systemd --user' <<<"$out"
+printf 'DEPOTS_GIT=("%s")\nCHEZMOI_VERIFIER=non\nDEPOTS_GIT_RELANCER="web.service"\n' "$G/web" >"$G/acm/local.conf"
+PATH="$G/bin:$PATH" env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depots-git.sh" >/dev/null 2>&1; rc=$?
+check "depots-git relancer : tableau non associatif, arret" eq "$rc" "1"
+check "depots-git relancer : tableau non associatif, dit au journal" grep -q 'DEPOTS_GIT_RELANCER doit etre un tableau associatif' "$LOG_DIR/depots-git.log"
+unset RELANCES WEB_DEPOT
 
 echo "micrologiciel, nettoyage, outils-ia, acmefrag (bouchons)"
 B="$TMP/bouchons"; mkdir -p "$B"
