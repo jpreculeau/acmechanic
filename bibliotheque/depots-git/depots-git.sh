@@ -7,7 +7,9 @@
 # ecrases : le script le signale et passe au suivant. L'avance rapide est
 # aussi reportee tant qu'une unite systemd declaree pour ce depot tourne
 # (DEPOTS_GIT_UNITES) ; apres elle, les services declares sont redemarres
-# (DEPOTS_GIT_RELANCER).
+# (DEPOTS_GIT_RELANCER). Seule la branche par defaut de l'amont, extraite
+# sous le meme nom, est avancee ; un verrou par clone (partage avec acmefrag)
+# evite deux mises a jour en parallele.
 #
 # Acmechanic lui-meme n'est pas traite ici : il se met a jour seul, en fin
 # de run (ACMECHANIC_AUTO_MAJ), pour ne pas modifier des scripts en cours
@@ -30,6 +32,9 @@ source "${ACMECHANIC_HOME}/lib/service.sh"
 # --- Reglages (surchargeables dans local.conf) ---------------------------------
 # Depots a suivre, ex. DEPOTS_GIT=("$HOME/acmefrag" "$HOME/outils/mon-script")
 if [[ -z "${DEPOTS_GIT+x}" ]]; then DEPOTS_GIT=(); fi
+# Attente maximale (s) du verrou d'un clone tenu par un autre service (ex.
+# acmefrag, qui met a jour son propre clone) ; au-dela, depot ignore ce passage.
+: "${VERROU_DEPOT_ATTENTE:=300}"
 # Unites systemd --user qui executent le code d'un depot : tant que l'une
 # tourne, l'avance rapide est reportee au passage suivant (le fetch a lieu).
 # Declarer le .service qui execute le code, pas son .timer (toujours actif) ;
@@ -93,7 +98,7 @@ unite_en_cours() {
 }
 
 maj_depot() {
-	local depot="$1" nom n avant apres occupe unite relancer
+	local depot="$1" nom hors
 	nom="$(basename "$depot")"
 	if ! git -C "$depot" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 		ignorer_etape "$nom" "pas un depot git : $depot"
@@ -107,6 +112,26 @@ maj_depot() {
 		ignorer_etape "$nom" "aucune branche amont suivie"
 		return
 	fi
+	hors="$(hors_branche_par_defaut "$depot")"
+	case $? in
+		0) ;;
+		2) signaler_sans_branche_par_defaut "$nom" "$depot" "$hors"; return ;;
+		*) ignorer_etape "$nom" "$hors"; return ;;
+	esac
+	verrou_depot "$depot"
+	case $? in
+		0) ;;
+		1) ignorer_etape "$nom" "depot en cours de mise a jour par un autre service (verrou tenu plus de ${VERROU_DEPOT_ATTENTE} s)"; return ;;
+		*) ignorer_etape "$nom" "verrou du depot impossible a prendre (dossier git non inscriptible, ou VERROU_DEPOT_ATTENTE non entier)"; return ;;
+	esac
+	avancer_depot "$depot" "$nom"
+	liberer_depot
+}
+
+# avancer_depot <depot> <nom> : fetch, puis avance rapide si possible, sous le
+# verrou du clone (pris par maj_depot).
+avancer_depot() {
+	local depot="$1" nom="$2" n avant apres occupe unite relancer cmd
 	etape "$nom : recherche de nouveautes" 90 git -C "$depot" fetch -q || return
 	n="$(retard "$depot")"
 	avant="$(git -C "$depot" rev-parse --short HEAD)"
@@ -116,15 +141,17 @@ maj_depot() {
 		return
 	fi
 	if [ "$DEPOTS_APPLIQUER" != oui ]; then
+		printf -v cmd 'git -C %q pull --ff-only' "$depot"
 		point_attention "$nom : $n commit(s) disponible(s), non appliques (DEPOTS_APPLIQUER=non)" \
-			"git -C $depot pull --ff-only" \
+			"$cmd" \
 			"le depot reste en retard sur sa branche suivie" \
 			"avance rapide du depot ; refus sans rien toucher s'il a diverge ou si des modifications locales touchent les memes fichiers"
 		return
 	fi
 	if [ -n "$(git -C "$depot" status --porcelain --untracked-files=no)" ]; then
+		printf -v cmd 'git -C %q status' "$depot"
 		point_attention "$nom : $n commit(s) disponible(s), non appliques : modifications locales" \
-			"git -C $depot status" \
+			"$cmd" \
 			"la mise a jour automatique est bloquee par des modifications locales" \
 			"affiche les fichiers modifies, sans rien changer ; a committer ou ecarter vous-meme"
 		return
@@ -156,7 +183,7 @@ maj_depot() {
 }
 
 verifier_chezmoi() {
-	local source n
+	local source n cmd
 	source="$(chezmoi source-path 2>/dev/null)" || return 0
 	# source-path peut designer un sous-dossier (.chezmoiroot) : on remonte
 	# a la racine du depot.
@@ -165,9 +192,13 @@ verifier_chezmoi() {
 	etape "chezmoi : recherche de nouveautes" 90 git -C "$source" fetch -q || return
 	n="$(retard "$source")"
 	if [ "$n" -gt 0 ]; then
-		point_attention "chezmoi : $n commit(s) en attente dans le depot source" "chezmoi update" \
+		# Jamais `chezmoi update` : il appliquerait tout, y compris par-dessus des
+		# fichiers modifies a la main ou des changements de source d'une autre
+		# session. On tire seulement ; appliquer reste un choix, par chemins.
+		printf -v cmd 'git -C %q pull --ff-only' "$source"
+		point_attention "chezmoi : $n commit(s) en attente dans le depot source" "$cmd" \
 			"les fichiers de la machine ne suivent pas les derniers commits de la source" \
-			"tire le depot source puis applique ses fichiers (chezmoi demande avant d'ecraser un fichier modifie)"
+			"tire le depot source sans rien appliquer ; ensuite chezmoi status, puis chezmoi apply des chemins voulus"
 	else
 		inchanger_etape "chezmoi" "depot source a jour"
 	fi
