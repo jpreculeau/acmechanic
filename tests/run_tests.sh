@@ -120,6 +120,51 @@ check "depots-git : code 0" eq "$rc" "0"
 check "depots-git : depot propre mis a jour" eq "$(git -C "$G/outil" rev-parse HEAD)" "$(git -C "$G/outil.git" rev-parse HEAD)"
 check "depots-git : depot modifie laisse intact" grep -q 'sale : 1 commit(s) disponible(s), non appliques' <<<"$out"
 check "depots-git : Acmechanic laisse a l'auto-mise a jour" grep -q 'se met a jour lui-meme' <<<"$out"
+# Unite systemd en cours (oneshot : etat « activating », is-active rend 3) :
+# avance rapide reportee, cle ecrite avec « / » final ; etat illisible :
+# reportee ; unites inactives ou en echec : appliquee ; deux cles pour un
+# meme depot : unites reunies ; cle sans depot, unite inconnue, timer :
+# signales ; tableau non associatif : arret, rien n'avance.
+nouveau_depot occupe; publier occupe
+nouveau_depot muet; publier muet
+publier outil
+mkdir -p "$G/bin"
+cat >"$G/bin/systemctl" <<'EOF'
+#!/bin/sh
+if [ "$1 $2 $3 $4 $5 $6" = "--user show -p LoadState --value --" ]; then
+	case "$7" in inconnue.service) echo not-found ;; *) echo loaded ;; esac
+	exit 0
+fi
+[ "$1 $2 $3" = "--user is-active --" ] || exit 1
+case "$4" in
+	occupe.service) echo activating ;;
+	echec.service) echo failed ;;
+	vide.service) ;;
+	*) echo inactive ;;
+esac
+exit 3
+EOF
+chmod +x "$G/bin/systemctl"
+{
+	printf 'DEPOTS_GIT=("%s" "%s" "%s")\nCHEZMOI_VERIFIER=non\n' "$G/occupe" "$G/outil" "$G/muet"
+	printf 'declare -A DEPOTS_GIT_UNITES=(["%s/"]="libre.service" ["%s"]="occupe.service" ["%s"]="libre.service echec.service inconnue.service" ["%s"]="vide.service" ["%s"]="x.timer")\n' \
+		"$G/occupe" "$G/occupe" "$G/outil" "$G/muet" "$G/nulle/part"
+} >"$G/acm/local.conf"
+PATH="$G/bin:$PATH" env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depots-git.sh" >/dev/null 2>&1; rc=$?
+out="$(cat "$LOG_DIR/depots-git.log")"
+check "depots-git : code 0 avec unites" eq "$rc" "0"
+check "depots-git : unite en cours, avance rapide reportee" not test "$(git -C "$G/occupe" rev-parse HEAD)" = "$(git -C "$G/occupe.git" rev-parse HEAD)"
+check "depots-git : report dit au journal" grep -q 'occupe -- ignore : avance rapide reportee : occupe.service en cours (activating), 1 commit(s) en attente' <<<"$out"
+check "depots-git : etat illisible, avance rapide reportee" grep -q 'muet -- ignore : avance rapide reportee : vide.service : etat illisible (systemctl --user injoignable ?)' <<<"$out"
+check "depots-git : unites inactives ou en echec, avance rapide appliquee" eq "$(git -C "$G/outil" rev-parse HEAD)" "$(git -C "$G/outil.git" rev-parse HEAD)"
+check "depots-git : cle sans depot signalee" grep -q "DEPOTS_GIT_UNITES : $G/nulle/part ne correspond a aucun depot" <<<"$out"
+check "depots-git : unite inconnue signalee" grep -q 'DEPOTS_GIT_UNITES : unite inconnue.service inconnue de systemd --user' <<<"$out"
+check "depots-git : timer signale" grep -q 'DEPOTS_GIT_UNITES : x.timer est un timer, toujours actif' <<<"$out"
+printf 'DEPOTS_GIT=("%s")\nCHEZMOI_VERIFIER=non\nDEPOTS_GIT_UNITES=(["%s"]="occupe.service")\n' "$G/occupe" "$G/occupe" >"$G/acm/local.conf"
+PATH="$G/bin:$PATH" env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depots-git.sh" >/dev/null 2>&1; rc=$?
+check "depots-git : tableau non associatif, arret" eq "$rc" "1"
+check "depots-git : tableau non associatif, dit au journal" grep -q 'DEPOTS_GIT_UNITES doit etre un tableau associatif' "$LOG_DIR/depots-git.log"
+check "depots-git : tableau non associatif, rien n'avance" not test "$(git -C "$G/occupe" rev-parse HEAD)" = "$(git -C "$G/occupe.git" rev-parse HEAD)"
 
 echo "micrologiciel, nettoyage, outils-ia, acmefrag (bouchons)"
 B="$TMP/bouchons"; mkdir -p "$B"

@@ -28,7 +28,7 @@ Images hors Docker Hub (Forgejo sur Codeberg, Open WebUI sur ghcr.io) : l'image 
 
 | Service | Ce qu'il fait | Ce qu'il ne fait **jamais** |
 |---|---|---|
-| [`depots-git`](depots-git/) | Met à jour vos scripts et outils clonés par git (`DEPOTS_GIT`) en avance rapide ; signale les nouveautés du dépôt chezmoi | écraser des modifications locales ; appliquer `chezmoi update` |
+| [`depots-git`](depots-git/) | Met à jour vos scripts et outils clonés par git (`DEPOTS_GIT`) en avance rapide, reportée tant qu'une unité systemd déclarée qui exécute ce code tourne (`DEPOTS_GIT_UNITES`) ; signale les nouveautés du dépôt chezmoi | écraser des modifications locales ; changer le code sous une unité déclarée en cours ; appliquer `chezmoi update` |
 | [`outils-ia`](outils-ia/) | Claude Code, CLI npm (`IA_NPM`), outils `uv`/`pipx`, pi.dev, Hermes (+ sauvegarde de leur configuration) ; Ollama par son installeur officiel avec `OLLAMA_MAJ=oui` (service remis dans son état, retour à l'ancienne version en cas d'échec) | mettre à jour Hermes depuis une session Hermes ; installer Ollama sans `OLLAMA_MAJ=oui` (signalé seulement) |
 | [`session-graphique`](session-graphique/) | Gestionnaire de fenêtres (Hyprland, Sway, labwc, Wayfire, niri : version, greffons `hyprpm`) ; barre et outils installés par pip depuis git **avec vos correctifs** (branches fusionnées, conflits connus rejoués par `git rerere`), copie de sécurité et retour arrière ; relance de la barre proposée | installer si un correctif ne s'applique plus : rien ne change, point d'attention |
 | [`micrologiciel`](micrologiciel/) | Signale les mises à jour de l'EEPROM du Raspberry Pi et des micrologiciels LVFS (`fwupd`) | flasher quoi que ce soit : la commande à lancer vous est donnée |
@@ -65,7 +65,7 @@ Aucun script n'est à modifier : tout se surcharge dans `local.conf` (modèle : 
 
 **Canal de pointe** : avec `develop`, `edge`, `unstable`…, `choisir_tag` compare la date de publication du canal et de `latest` et retient **le plus récent** — un canal abandonné ne vous fige jamais sur une vieille image.
 
-**Maintenance** — chaque service documente ses réglages en tête de script : `DEPOTS_GIT`, `DEPOTS_APPLIQUER`, `CHEZMOI_VERIFIER` ; `IA_OUTILS`, `IA_NPM`, `OLLAMA_MODELES_MAJ` ; `NETTOYAGE_*` ; `ACMEFRAG_DOSSIER`, `ACMEFRAG_CIBLE`, `ACMEFRAG_SANTE_CIBLE`, `ACMEFRAG_DELAI_SANTE` ; `CROSS_SEED_CONFIG`, `CROSS_SEED_QBIT_URL`, `CROSS_SEED_LIENS`, `NETTOYAGE_XSEED` (liens physiques de cross-seed : `lib/xseed.sh`, partagé par `cross-seed` et `nettoyage` ; `jq` requis pour l'API qBittorrent).
+**Maintenance** — chaque service documente ses réglages en tête de script : `DEPOTS_GIT`, `DEPOTS_GIT_UNITES`, `DEPOTS_APPLIQUER`, `CHEZMOI_VERIFIER` ; `IA_OUTILS`, `IA_NPM`, `OLLAMA_MODELES_MAJ` ; `NETTOYAGE_*` ; `ACMEFRAG_DOSSIER`, `ACMEFRAG_CIBLE`, `ACMEFRAG_SANTE_CIBLE`, `ACMEFRAG_DELAI_SANTE` ; `CROSS_SEED_CONFIG`, `CROSS_SEED_QBIT_URL`, `CROSS_SEED_LIENS`, `NETTOYAGE_XSEED` (liens physiques de cross-seed : `lib/xseed.sh`, partagé par `cross-seed` et `nettoyage` ; `jq` requis pour l'API qBittorrent).
 
 ## 🧩 Contrat d'un compose compatible
 

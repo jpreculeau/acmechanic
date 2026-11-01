@@ -48,6 +48,7 @@
 
 # --- Maintenance de la machine ---
 # DEPOTS_GIT=("$HOME/acmefrag" "$HOME/outils/mon-script")
+# declare -A DEPOTS_GIT_UNITES=(["$HOME/outils/mon-script"]="mon-script.service")  # avance rapide reportée tant que ce .service tourne (pas son .timer : toujours actif)
 # IA_OUTILS="claude npm uv pipx pi hermes ollama"
 # IA_NPM=(@openai/codex @google/gemini-cli)
 # CLAUDE_REPRISE_ATTENTE=30        # s avant le second essai de « claude update » en échec
