@@ -256,13 +256,17 @@ ok()   { _log_raw "OK"     "$C_GREEN"  "$1"; }
 warn() { _log_raw "ATTENTION" "$C_YELLOW" "$1"; }
 err()  { _log_raw "ERREUR" "$C_RED"    "$1"; }
 step() { _log_raw "ETAPE"  "$C_BLUE"   "$1"; }
-# Titre encadre, pour le debut d'un script.
+# titre_ecran <texte> : bandeau a l'ecran seulement.
+titre_ecran() {
+	printf '%s%s%s\n' "$C_BOLD$C_BLUE" "=============================================" "$C_OFF"
+	printf '%s  %s%s\n' "$C_BOLD$C_BLUE" "$1" "$C_OFF"
+	printf '%s%s%s\n' "$C_BOLD$C_BLUE" "=============================================" "$C_OFF"
+}
+
+# titre <texte> : bandeau a l'ecran et ligne au journal (debut d'un script).
 titre() {
-	local t="$1"
-	printf '%s%s%s\n' "$C_BOLD$C_BLUE" "=============================================" "$C_OFF"
-	printf '%s  %s%s\n' "$C_BOLD$C_BLUE" "$t" "$C_OFF"
-	printf '%s%s%s\n' "$C_BOLD$C_BLUE" "=============================================" "$C_OFF"
-	printf '[%s] ===== %s =====\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$t" >>"$LOG_FILE"
+	titre_ecran "$1"
+	printf '[%s] ===== %s =====\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$1" >>"$LOG_FILE"
 }
 
 # --- Verrou : empeche deux executions simultanees du meme script ---
