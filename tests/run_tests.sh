@@ -66,6 +66,10 @@ check "lien numerote : ordre impose" grep -qE 'alpha +ordre impose' <<<"$liste"
 ln -s "$ROOT/bibliotheque/syncthing" "$S/syncthing"
 liste="$(SERVICES_DIR="$S" ORDRE_DIR="$TMP/vide" "$ROOT/acmechanic.sh" --liste 2>&1)"
 check "service de la bibliotheque lie (symlink) detecte" grep -qE 'syncthing +detecte automatiquement' <<<"$liste"
+# --liste n'a aucun effet : rien n'est ecrit au journal d'Acmechanic.
+: >"$LOG_DIR/acmechanic.log"
+SERVICES_DIR="$S" ORDRE_DIR="$TMP/vide" "$ROOT/acmechanic.sh" --liste >/dev/null 2>&1
+check "--liste : rien ecrit au journal" not test -s "$LOG_DIR/acmechanic.log"
 
 echo "bibliotheque (lib/service.sh)"
 out="$(bash -c '

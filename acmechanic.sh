@@ -214,7 +214,7 @@ case "${1:-}" in
 --services) faire_systeme=false ;;
 --systeme) faire_services=false ;;
 --liste)
-	titre "ETAPES PREVUES PAR ACMECHANIC"
+	titre_ecran "ETAPES PREVUES PAR ACMECHANIC"
 	decouvrir_services
 	echo "1. Services detectes :"
 	if [ ${#SERVICES_TROUVES[@]} -eq 0 ]; then
