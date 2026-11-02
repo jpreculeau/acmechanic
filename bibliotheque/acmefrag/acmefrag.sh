@@ -4,7 +4,9 @@
 # Operations courtes, jamais de defragmentation ici : elle peut
 # durer des heures et doit rester dans sa propre tache planifiee (la
 # nuit, bridee par AcmeFrag lui-meme).
-#   1. mise a jour d'AcmeFrag depuis son depot (avance rapide seulement)
+#   1. mise a jour d'AcmeFrag depuis son depot (avance rapide seulement, sur
+#      la branche par defaut de l'amont, sous le verrou du clone partage avec
+#      depots-git)
 #   2. tests d'AcmeFrag (make test) apres une mise a jour
 #   3. mesure SANS modification (--auto --dry-run) sur ACMEFRAG_CIBLE,
 #      si elle est definie : rapport consultable dans ses journaux ; ses
@@ -78,15 +80,17 @@ fi
 # --- 1. Mise a jour --------------------------------------------------------------
 avant="$(version_commande "$AF" --version)"
 MIS_A_JOUR=non
-if ! git -C "$ACMEFRAG_DOSSIER" rev-parse -q --verify '@{u}' >/dev/null 2>&1; then
-	ignorer_etape "AcmeFrag : mise a jour" "pas un clone git suivant une branche amont"
-elif etape "AcmeFrag : recherche de nouveautes" 90 git -C "$ACMEFRAG_DOSSIER" fetch -q; then
+# mettre_a_jour : fetch puis avance rapide du clone, sous son verrou (depots-git
+# peut viser le meme clone en parallele).
+mettre_a_jour() {
+	etape "AcmeFrag : recherche de nouveautes" 90 git -C "$ACMEFRAG_DOSSIER" fetch -q || return
 	n="$(git -C "$ACMEFRAG_DOSSIER" rev-list --count 'HEAD..@{u}')"
 	if [ "$n" -eq 0 ]; then
 		inchanger_etape "AcmeFrag" "a jour ($avant)"
 	elif [ -n "$(git -C "$ACMEFRAG_DOSSIER" status --porcelain --untracked-files=no)" ]; then
+		printf -v cmd 'git -C %q status' "$ACMEFRAG_DOSSIER"
 		point_attention "AcmeFrag : $n commit(s) disponible(s), non appliques : modifications locales" \
-			"git -C $ACMEFRAG_DOSSIER status" \
+			"$cmd" \
 			"la mise a jour automatique est bloquee par des modifications locales" \
 			"affiche les fichiers modifies, sans rien changer ; a committer ou ecarter vous-meme"
 	elif etape "AcmeFrag : mise a jour ($n commit(s))" 120 \
@@ -94,6 +98,23 @@ elif etape "AcmeFrag : recherche de nouveautes" 90 git -C "$ACMEFRAG_DOSSIER" fe
 		MIS_A_JOUR=oui
 		NB_MAJ=$((NB_MAJ + 1))
 	fi
+}
+if ! git -C "$ACMEFRAG_DOSSIER" rev-parse -q --verify '@{u}' >/dev/null 2>&1; then
+	ignorer_etape "AcmeFrag : mise a jour" "pas un clone git suivant une branche amont"
+else
+	hors="$(hors_branche_par_defaut "$ACMEFRAG_DOSSIER")"
+	case $? in
+		0)
+			verrou_depot "$ACMEFRAG_DOSSIER"
+			case $? in
+				0) mettre_a_jour; liberer_depot ;;
+				1) ignorer_etape "AcmeFrag : mise a jour" "depot en cours de mise a jour par un autre service (verrou tenu plus de ${VERROU_DEPOT_ATTENTE:-300} s)" ;;
+				*) ignorer_etape "AcmeFrag : mise a jour" "verrou du depot impossible a prendre (dossier git non inscriptible, ou VERROU_DEPOT_ATTENTE non entier)" ;;
+			esac
+			;;
+		2) signaler_sans_branche_par_defaut "AcmeFrag" "$ACMEFRAG_DOSSIER" "$hors" ;;
+		*) ignorer_etape "AcmeFrag : mise a jour" "$hors" ;;
+	esac
 fi
 enregistrer_version "acmefrag" "$avant" "$(version_commande "$AF" --version)"
 

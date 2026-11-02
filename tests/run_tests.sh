@@ -212,6 +212,72 @@ PATH="$G/bin:$PATH" env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depot
 check "depots-git relancer : tableau non associatif, arret" eq "$rc" "1"
 check "depots-git relancer : tableau non associatif, dit au journal" grep -q 'DEPOTS_GIT_RELANCER doit etre un tableau associatif' "$LOG_DIR/depots-git.log"
 unset RELANCES WEB_DEPOT
+# Branche extraite autre que la branche par defaut de l'amont (developpement en
+# cours dans le clone) : pas d'avance rapide, meme si elle suit une branche amont.
+nouveau_depot travail; git -C "$G/travail" checkout -q -b essai --track origin/main; publier travail
+# Source chezmoi en retard : l'action proposee tire le depot sans rien appliquer
+# (`chezmoi update` appliquerait tout et ecraserait les fichiers modifies a la main).
+nouveau_depot cz; publier cz; mv "$G/cz" "$G/c z"
+cat >"$G/bin/chezmoi" <<EOF2
+#!/bin/sh
+case "\$1" in source-path) echo "$G/c z" ;; status) ;; esac
+EOF2
+chmod +x "$G/bin/chezmoi"
+printf 'DEPOTS_GIT=("%s")\nCHEZMOI_VERIFIER=oui\n' "$G/travail" >"$G/acm/local.conf"
+PATH="$G/bin:$PATH" env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depots-git.sh" >/dev/null 2>&1
+out="$(cat "$LOG_DIR/depots-git.log")"
+check "depots-git : branche autre que celle par defaut, pas d'avance rapide" not test "$(git -C "$G/travail" rev-parse HEAD)" = "$(git -C "$G/travail.git" rev-parse HEAD)"
+check "depots-git : branche autre que celle par defaut, dit au journal" grep -q "travail -- ignore : branche essai extraite, pas main" <<<"$out"
+check "depots-git : chezmoi en retard, action sans apply, chemin cite" grep -qF "chezmoi : 1 commit(s) en attente dans le depot source -> git -C $(printf %q "$G/c z") pull --ff-only" <<<"$out"
+check "depots-git : chezmoi update jamais propose" not grep -q 'chezmoi update' <<<"$out"
+check "depots-git : chezmoi, source non modifiee" not test "$(git -C "$G/c z" rev-parse HEAD)" = "$(git -C "$G/cz.git" rev-parse HEAD)"
+# Verrou par clone : un autre service (acmefrag met a jour son clone) qui tient
+# deja le depot => pas de fetch ni d'avance rapide en parallele ; on attend au
+# plus VERROU_DEPOT_ATTENTE s, puis l'etape est ignoree.
+nouveau_depot pris; publier pris
+verrou_pris="$(git -C "$G/pris" rev-parse --absolute-git-dir)/acmechanic-maj.lock"
+flock -x "$verrou_pris" sleep 30 & tient=$!
+for _ in $(seq 50); do flock -n "$verrou_pris" true || break; sleep 0.1; done  # attendre que le verrou soit tenu
+printf 'DEPOTS_GIT=("%s")\nCHEZMOI_VERIFIER=non\nVERROU_DEPOT_ATTENTE=1\n' "$G/pris" >"$G/acm/local.conf"
+PATH="$G/bin:$PATH" env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depots-git.sh" >/dev/null 2>&1
+pkill -P "$tient" 2>/dev/null; kill "$tient" 2>/dev/null; wait "$tient" 2>/dev/null  # sleep, fils de flock, tient aussi le verrou
+check "depots-git : clone tenu par un autre service, pas d'avance rapide" not test "$(git -C "$G/pris" rev-parse HEAD)" = "$(git -C "$G/pris.git" rev-parse HEAD)"
+check "depots-git : clone tenu, dit au journal" grep -q "pris -- ignore : depot en cours de mise a jour par un autre service" "$LOG_DIR/depots-git.log"
+PATH="$G/bin:$PATH" env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depots-git.sh" >/dev/null 2>&1
+check "depots-git : verrou libre, avance rapide" eq "$(git -C "$G/pris" rev-parse HEAD)" "$(git -C "$G/pris.git" rev-parse HEAD)"
+# Le verrou d'un clone n'est pas herite par les processus lances par etape : un
+# processus detache (maintenance automatique de git) le garderait apres le service.
+out="$(bash -c 'SERVICE_NAME=t; source "$ACMECHANIC_HOME/lib/common.sh"
+verrou_depot "$1" || exit 9
+run_etape "detache" 10 bash -c "setsid sleep 3 >/dev/null 2>&1 </dev/null &" >/dev/null 2>&1
+liberer_depot
+if flock -n "$2" true; then echo libre; else echo tenu; fi' _ "$G/pris" "$verrou_pris" 2>/dev/null)"
+check "verrou d'un clone : pas herite par les fils d'une etape" eq "$out" "libre"
+# Chemin qui n'est pas un depot git : dit tel quel (le verrou ne s'en mele pas).
+mkdir -p "$G/pas-git"
+printf 'DEPOTS_GIT=("%s")\nCHEZMOI_VERIFIER=non\n' "$G/pas-git" >"$G/acm/local.conf"
+PATH="$G/bin:$PATH" env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depots-git.sh" >/dev/null 2>&1
+check "depots-git : chemin non git, dit tel quel" grep -q "pas-git -- ignore : pas un depot git" "$LOG_DIR/depots-git.log"
+# Attente du verrou non entiere : verrou impossible, dit au journal, rien n'avance.
+publier pris
+printf 'DEPOTS_GIT=("%s")\nCHEZMOI_VERIFIER=non\nVERROU_DEPOT_ATTENTE=dix\n' "$G/pris" >"$G/acm/local.conf"
+PATH="$G/bin:$PATH" env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depots-git.sh" >/dev/null 2>&1
+check "depots-git : attente non entiere, verrou impossible" grep -q "pris -- ignore : verrou du depot impossible a prendre" "$LOG_DIR/depots-git.log"
+check "depots-git : attente non entiere, rien n'avance" not test "$(git -C "$G/pris" rev-parse HEAD)" = "$(git -C "$G/pris.git" rev-parse HEAD)"
+# Branche qui suit une branche locale (amont « . ») : branche de travail, ignoree.
+nouveau_depot local; git -C "$G/local" checkout -q -b loc --track main
+printf 'DEPOTS_GIT=("%s")\nCHEZMOI_VERIFIER=non\n' "$G/local" >"$G/acm/local.conf"
+: >"$G/att-dg"
+ACMECHANIC_ATTENTION_FICHIER="$G/att-dg" PATH="$G/bin:$PATH" env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depots-git.sh" >/dev/null 2>&1
+check "depots-git : amont local, branche de travail ignoree" grep -q "local -- ignore : branche loc suit une branche locale" "$LOG_DIR/depots-git.log"
+check "depots-git : amont local, pas de point d'attention" not test -s "$G/att-dg"
+# Amont sans branche par defaut connue : point d'attention (sinon il ne bougerait plus, en silence).
+nouveau_depot sanshead; publier sanshead; git -C "$G/sanshead" remote set-head origin -d; mv "$G/sanshead" "$G/sans head"
+printf 'DEPOTS_GIT=("%s")\nCHEZMOI_VERIFIER=non\n' "$G/sans head" >"$G/acm/local.conf"
+: >"$G/att-dg"
+ACMECHANIC_ATTENTION_FICHIER="$G/att-dg" PATH="$G/bin:$PATH" env -u ACMECHANIC_HOME "$G/acm/bibliotheque/depots-git/depots-git.sh" >/dev/null 2>&1
+check "depots-git : branche par defaut inconnue, point d'attention" grep -q "sans head : branche par defaut de origin inconnue" "$G/att-dg"
+check "depots-git : branche par defaut inconnue, commande citee" grep -qF "git -C $(printf %q "$G/sans head") remote set-head origin --auto" "$G/att-dg"
 
 echo "micrologiciel, nettoyage, outils-ia, acmefrag (bouchons)"
 B="$TMP/bouchons"; mkdir -p "$B"
@@ -275,6 +341,23 @@ sante() { # sante <code de --sante> [VAR=valeur...] : lance le service, renvoie 
 		ACMEFRAG_SANTE_CIBLE="$TMP/mon disque" ACMECHANIC_ATTENTION_FICHIER="$TMP/att-af" "$@" \
 		"$ROOT/bibliotheque/acmefrag/acmefrag.sh" >"$TMP/af.out" 2>&1
 }
+# Clone AcmeFrag sur une branche de travail : pas de mise a jour automatique.
+nouveau_depot af-git "$AFD"; git -C "$G/af-git" checkout -q -b essai --track origin/main; publier af-git
+sante 0 ACMEFRAG_DOSSIER="$G/af-git"
+check "acmefrag : branche de travail extraite, pas de mise a jour" not test "$(git -C "$G/af-git" rev-parse HEAD)" = "$(git -C "$G/af-git.git" rev-parse HEAD)"
+check "acmefrag : branche de travail, dit au journal" grep -q "AcmeFrag : mise a jour -- ignore : branche essai extraite, pas main" "$LOG_DIR/acmefrag.log"
+# Clone d'AcmeFrag tenu par un autre service (depots-git) : pas de mise a jour.
+nouveau_depot af-v "$AFD"; publier af-v
+verrou_af="$(git -C "$G/af-v" rev-parse --absolute-git-dir)/acmechanic-maj.lock"
+flock -x "$verrou_af" sleep 30 & tient=$!
+for _ in $(seq 50); do flock -n "$verrou_af" true || break; sleep 0.1; done
+sante 0 ACMEFRAG_DOSSIER="$G/af-v" VERROU_DEPOT_ATTENTE=1
+pkill -P "$tient" 2>/dev/null; kill "$tient" 2>/dev/null; wait "$tient" 2>/dev/null
+check "acmefrag : clone tenu, pas de mise a jour" not test "$(git -C "$G/af-v" rev-parse HEAD)" = "$(git -C "$G/af-v.git" rev-parse HEAD)"
+check "acmefrag : clone tenu, dit au journal" grep -q "AcmeFrag : mise a jour -- ignore : depot en cours de mise a jour par un autre service" "$LOG_DIR/acmefrag.log"
+git -C "$G/af-git" checkout -q main; git -C "$G/af-git" remote set-head origin -d
+sante 0 ACMEFRAG_DOSSIER="$G/af-git"
+check "acmefrag : branche par defaut inconnue, point d'attention" grep -qF "git -C $G/af-git remote set-head origin --auto" "$TMP/att-af"
 sante 6; rc=$?
 check "acmefrag sante : alerte => point d'attention, pas un echec" eq "$rc" "0"
 check "acmefrag sante : --sante lance sur la cible" grep -q -- "$TMP/mon disque --sante" "$TMP/af.log"

@@ -642,13 +642,14 @@ run_etape() {
 	debut=$SECONDS
 
 	# </dev/null : garantit qu'aucune commande ne peut attendre une saisie.
-	# 9>&- : ferme le descripteur du verrou dans l'enfant. Sans cela,
+	# 9>&- (et 7>&-, verrou d'un clone) : ferme le descripteur du verrou
+	# dans l'enfant. Sans cela,
 	# l'enfant herite du verrou du parent et le maintient ouvert, ce qui
 	# bloque les executions suivantes et empeche les scripts appeles de
 	# prendre leur propre verrou.
 	(
 		"$@"
-	) </dev/null 9>&- &
+	) </dev/null 9>&- 7>&- &
 	local pid_tache=$!
 
 	# Minuterie : tue la tache si elle depasse le delai accorde.
@@ -659,7 +660,7 @@ run_etape() {
 		kill -TERM "$pid_tache" 2>/dev/null
 		sleep 5
 		kill -KILL "$pid_tache" 2>/dev/null
-	) >/dev/null 2>&1 9>&- &
+	) >/dev/null 2>&1 9>&- 7>&- &
 	local pid_minuterie=$!
 
 	if wait "$pid_tache" 2>/dev/null; then
@@ -1071,6 +1072,73 @@ premiere_ligne() {
 	local v
 	v="$(cat)"
 	echo "${v%%$'\n'*}"
+}
+
+# signaler_sans_branche_par_defaut <nom> <depot> <raison> : point d'attention
+# pour un clone dont la branche par defaut de l'amont est inconnue (code 2 de
+# hors_branche_par_defaut), avec la commande qui l'enregistre.
+signaler_sans_branche_par_defaut() {
+	local amont cmd
+	amont="$(git -C "$2" for-each-ref --format='%(upstream:remotename)' "refs/heads/$(git -C "$2" branch --show-current)")"
+	printf -v cmd 'git -C %q remote set-head %q --auto' "$2" "$amont"
+	point_attention "$1 : $3, pas d'avance rapide" "$cmd" \
+		"sans branche par defaut connue, le depot ne sera plus jamais mis a jour" \
+		"enregistre la branche par defaut de l'amont (lecture du depot distant) ; le passage suivant reprend les avances rapides"
+}
+
+# verrou_depot <depot> : prend le verrou de mise a jour du clone (fichier
+# acmechanic-maj.lock dans son dossier git), pour qu'un seul service a la fois
+# y fasse fetch et avance rapide (depots-git et acmefrag peuvent viser le meme
+# clone, en parallele). Descripteur 7, ferme dans les enfants de run_etape
+# comme le 9 : un processus detache par git ne doit pas garder le verrou.
+# Attend au plus VERROU_DEPOT_ATTENTE s (300) ; code 1 si le verrou est tenu
+# au-dela, 2 s'il ne peut pas etre pris (dossier git non inscriptible,
+# attente non entiere). liberer_depot le rend.
+verrou_depot() {
+	local fichier dossier
+	[[ "${VERROU_DEPOT_ATTENTE:-300}" =~ ^[0-9]+$ ]] || return 2
+	dossier="$(git -C "$1" rev-parse --absolute-git-dir 2>/dev/null)" || return 2
+	fichier="$dossier/acmechanic-maj.lock"
+	{ exec 7>>"$fichier"; } 2>/dev/null || return 2
+	if ! flock -w "${VERROU_DEPOT_ATTENTE:-300}" 7; then
+		liberer_depot
+		return 1
+	fi
+}
+liberer_depot() {
+	exec 7>&-
+}
+
+# hors_branche_par_defaut <depot> : rien et code 0 si le depot a extrait la
+# branche par defaut de son amont, sous le meme nom, et la suit ; sinon la
+# raison en clair et le code 1 (branche de travail, a laisser telle quelle)
+# ou 2 (branche par defaut inconnue : a signaler, sinon le clone ne bouge
+# plus sans que personne le sache). Une avance rapide automatique ne touche
+# jamais une branche de travail extraite dans le clone. Branche par defaut =
+# refs/remotes/<amont>/HEAD, pose par git clone.
+hors_branche_par_defaut() {
+	local courante amont suivie defaut
+	courante="$(git -C "$1" branch --show-current 2>/dev/null)"
+	[ -n "$courante" ] || { echo "HEAD detachee : aucune branche extraite"; return 1; }
+	amont="$(git -C "$1" for-each-ref --format='%(upstream:remotename)' "refs/heads/$courante" 2>/dev/null)"
+	suivie="$(git -C "$1" rev-parse --abbrev-ref '@{u}' 2>/dev/null)"
+	if [ -z "$amont" ] || [ -z "$suivie" ]; then
+		echo "aucune branche amont suivie"
+		return 1
+	fi
+	if [ "$amont" = . ]; then
+		echo "branche $courante suit une branche locale ($suivie)"
+		return 1
+	fi
+	defaut="$(git -C "$1" symbolic-ref -q --short "refs/remotes/$amont/HEAD" 2>/dev/null)"
+	if [ -z "$defaut" ]; then
+		echo "branche par defaut de $amont inconnue"
+		return 2
+	fi
+	if [ "$suivie" != "$defaut" ] || [ "$courante" != "${defaut#"$amont"/}" ]; then
+		echo "branche $courante extraite, pas ${defaut#"$amont"/} : avance rapide reservee a la branche par defaut"
+		return 1
+	fi
 }
 
 # version_commande <commande...> : premiere ligne de la sortie de la
